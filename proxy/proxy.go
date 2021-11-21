@@ -3,13 +3,15 @@ package proxy
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/hex"
 	"github.com/dustin/go-humanize"
 	"io"
+	"log"
 	"miner-proxy/pkg"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Proxy - Manages a Proxy connection, piping data between local and remote.
@@ -31,12 +33,11 @@ type Proxy struct {
 	Log       pkg.Logger
 	OutputHex bool
 	SecretKey string
-	IsClient bool
+	IsClient  bool
 }
 
-
 var (
-	totalSize  uint64
+	totalSize uint64
 )
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
@@ -66,10 +67,23 @@ type setNoDelayer interface {
 	SetNoDelay(bool) error
 }
 
+var once sync.Once
+
+func (p Proxy) TimerPrint() {
+	once.Do(func() {
+		t := time.Now()
+		for range time.Tick(time.Second * 30) {
+			total := atomic.LoadUint64(&totalSize)
+			log.Printf("从 %s 至现在总计加密转发 %s 数据\n", t.Format("2006-01-02 15:04:05"), humanize.Bytes(total))
+		}
+	})
+
+}
+
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer p.lconn.Close()
-
+	go p.TimerPrint()
 	var err error
 	//connect to remote
 	if p.tlsUnwrapp {
@@ -97,8 +111,8 @@ func (p *Proxy) Start() {
 	p.Log.Info("Opened %s >>> %s", p.laddr.String(), p.raddr.String())
 
 	//bidirectional copy
-	go p.pipe(p.lconn, p.rconn)
-	go p.pipe(p.rconn, p.lconn)
+	go p.pipe(p.lconn, p.rconn, true)
+	go p.pipe(p.rconn, p.lconn, false)
 
 	//wait for close...
 	<-p.errsig
@@ -116,7 +130,7 @@ func (p *Proxy) err(s string, err error) {
 	p.erred = true
 }
 
-func (p *Proxy) pipe(src, dst io.ReadWriter) {
+func (p *Proxy) pipe(src, dst io.ReadWriter, sendServer bool) {
 	islocal := src == p.lconn
 
 	var dataDirection string
@@ -156,29 +170,33 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 		//show output
 		p.Log.Debug(dataDirection, n, "")
 		p.Log.Trace(byteFormat, b)
-		if p.SecretKey != ""{
-			if bytes.HasPrefix(b, []byte("start-proxy")){
+		if p.SecretKey != "" {
+
+			if bytes.HasPrefix(b, []byte("start-proxy")) {
 				b, err = pkg.AesDecrypt(bytes.TrimLeft(b, "start-proxy"), []byte(p.SecretKey))
 				p.Log.Debug("解密后数据包: %s", strings.TrimSpace(string(b)))
 			}
 
-			switch p.IsClient {
-			case true:// 加密
+			if p.IsClient && sendServer { // 如果是客户端并且发送到服务端的数据全加密
+				p.Log.Debug("发送到服务端数据包, 稍后加密数据: %s", strings.TrimSpace(string(b)))
 				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
 				b = append([]byte("start-proxy"), b...)
-				p.Log.Debug("加密后数据包: %s", hex.Dump(b)[:76])
+
 			}
 
-			if err != nil{
+			if !p.IsClient && !sendServer {
+				p.Log.Debug("发送到客户端数据包, 稍后加密数据: %s", strings.TrimSpace(string(b)))
+				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
+				b = append([]byte("start-proxy"), b...)
+			}
+
+			if err != nil {
 				p.err("Encryption or decryption\n\n failed '%s'\n", err)
 				return
 			}
 		}
-		total := atomic.AddUint64(&totalSize, uint64(len(b)))
-		if total % 1000 == 0{
-			p.Log.Debug("代理数据包总计大小: %s", humanize.Bytes(total))
-		}
-		//write out result
+
+		atomic.AddUint64(&totalSize, uint64(len(b)))
 		n, err = dst.Write(b)
 		if err != nil {
 			p.err("Write failed '%s'\n", err)

@@ -17,10 +17,11 @@ var (
 	connid  = uint64(0)
 	logger  pkg.Logger
 
-	localAddr   = flag.String("l", ":9999", "本地监听地址")
-	remoteAddr  = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
-	secretKey   = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
-	isClient =  flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
+	localAddr  = flag.String("l", ":9999", "本地监听地址")
+	remoteAddr = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
+	secretKey  = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
+	isClient   = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
+	debug      = flag.Bool("debug", false, "是否开启debug")
 )
 
 func main() {
@@ -45,8 +46,8 @@ func main() {
 		logger.Warn("Failed to open local port to listen: %s", err)
 		os.Exit(1)
 	}
-	if len(*secretKey) % 16 != 0{
-		for len(*secretKey) % 16 != 0 {
+	if len(*secretKey)%16 != 0 {
+		for len(*secretKey)%16 != 0 {
 			*secretKey += "0"
 		}
 	}
@@ -62,8 +63,8 @@ func main() {
 		p.SecretKey = *secretKey
 		p.IsClient = *isClient
 		p.Log = pkg.ColorLogger{
-			Prefix:      fmt.Sprintf("Connection #%03d ", connid),
-			Verbose: true,
+			Prefix:  fmt.Sprintf("Connection #%03d ", connid),
+			Verbose: *debug,
 		}
 		go p.Start()
 	}
