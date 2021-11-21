@@ -39,7 +39,7 @@ nbminer.exe -a ergo -o stratum+tcp://127.0.0.1:34568 -u perror.test -mt 3
 ### 开源矿工
 1. ![](./images/open-miner-add.png)
 2. ![](./images/open-miner-add-pool.png)
-3 点击保存后点击"主矿池"搜索第一步中填写的矿池名称
+3. 点击保存后点击"主矿池"搜索第一步中填写的矿池名称
 
 ### 轻松矿工
 1. ![](./images/qskg-add.png)
