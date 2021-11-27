@@ -3,12 +3,12 @@ package proxy
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/hex"
 	"github.com/dustin/go-humanize"
 	"io"
 	"log"
 	"miner-proxy/pkg"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -123,21 +123,28 @@ func (p *Proxy) err(s string, err error) {
 	if p.erred {
 		return
 	}
-	if err != io.EOF {
-		p.Log.Warn(s, err)
-	}
+	//if err != io.EOF {
+	p.Log.Warn(s, err)
+	//}
 	p.errsig <- true
 	p.erred = true
 }
+
+var (
+	proxyStart    = []byte{115, 116, 97, 114, 116, 45, 112, 114, 111, 120, 121, 45, 101, 110, 99, 114, 121, 112, 116, 105, 111, 110}
+	proxyStartStr = string(proxyStart)
+	proxyEnd      = []byte{115, 116, 97, 114, 116, 45, 112, 114, 111, 120, 121, 45, 101, 110, 100}
+	proxyEndStr   = string(proxyEnd)
+)
 
 func (p *Proxy) pipe(src, dst io.ReadWriter, sendServer bool) {
 	islocal := src == p.lconn
 
 	var dataDirection string
 	if islocal {
-		dataDirection = ">>> %d bytes sent%s"
+		dataDirection = "local >>>  server %d bytes sent%s"
 	} else {
-		dataDirection = "<<< %d bytes recieved%s"
+		dataDirection = "server >>> local %d bytes recieved%s"
 	}
 
 	var byteFormat string
@@ -148,10 +155,10 @@ func (p *Proxy) pipe(src, dst io.ReadWriter, sendServer bool) {
 	}
 
 	//directional copy (64k buffer)
-	buff := make([]byte, 0xffff)
+	buff := make([]byte, 1024)
 	for {
 		n, err := src.Read(buff)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			p.err("Read failed '%s'\n", err)
 			return
 		}
@@ -171,23 +178,38 @@ func (p *Proxy) pipe(src, dst io.ReadWriter, sendServer bool) {
 		p.Log.Debug(dataDirection, n, "")
 		p.Log.Trace(byteFormat, b)
 		if p.SecretKey != "" {
+			if bytes.HasPrefix(b, proxyStart) {
 
-			if bytes.HasPrefix(b, []byte("start-proxy")) {
-				b, err = pkg.AesDecrypt(bytes.TrimLeft(b, "start-proxy"), []byte(p.SecretKey))
-				p.Log.Debug("解密后数据包: %s", strings.TrimSpace(string(b)))
+				for !bytes.Contains(b, proxyEnd) {
+					var temp = make([]byte, 1)
+					n, err := src.Read(temp)
+					if err != nil {
+						p.err("Read proxyEnd failed '%s'\n", err)
+						return
+					}
+					if len(temp) == 0 {
+						continue
+					}
+
+					b = append(b, temp[:n]...)
+				}
+				b = bytes.ReplaceAll(b, proxyEnd, nil)
+				p.Log.Debug("接受到加密数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
+				b, err = pkg.AesDecrypt(bytes.ReplaceAll(b, proxyStart, nil), []byte(p.SecretKey))
 			}
 
 			if p.IsClient && sendServer { // 如果是客户端并且发送到服务端的数据全加密
-				p.Log.Debug("发送到服务端数据包, 稍后加密数据: %s", strings.TrimSpace(string(b)))
 				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
-				b = append([]byte("start-proxy"), b...)
-
+				b = append(proxyStart, b...)
+				b = append(b, proxyEnd...)
+				p.Log.Debug("发送到服务端数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
 			}
 
 			if !p.IsClient && !sendServer {
-				p.Log.Debug("发送到客户端数据包, 稍后加密数据: %s", strings.TrimSpace(string(b)))
 				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
-				b = append([]byte("start-proxy"), b...)
+				b = append(proxyStart, b...)
+				b = append(b, proxyEnd...)
+				p.Log.Debug("发送到客户端数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
 			}
 
 			if err != nil {

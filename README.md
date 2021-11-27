@@ -134,6 +134,24 @@ Connection #007 发送到客户端数据包, 稍后加密数据: {"id":null,"met
 ```
 
 
+## 参数说明
+* 客户端使用服务的方式启动
+```
+# 创建服务
+./miner-proxy -install -debug -client -l :5556 -r {服务器ip}:5558  -secret_key 123456789
+
+```
+* 服务端使用服务的方式启动
+```
+./miner-proxy -install -debug -l :5558 -r {矿池host+port}  -secret_key 123456789
+```
+* 运行服务`./miner-proxy -start`
+* 停止服务`./miner-proxy -stop`
+* 重启服务`./miner-proxy -restart`
+* 删除服务`./miner-proxy -remove`
+* 删查看服务状态`./miner-proxy -stat`
+
+
 ## 矿工添加矿池示例
 ### 开源矿工
 1. ![](./images/open-miner-add.png)
