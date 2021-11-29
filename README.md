@@ -4,8 +4,14 @@
 * 不同与其他ssl加密代理, ssl加密依旧可以通过中间人的方式去篡改数据, 而采用这种方式, 除非你的密钥泄露再无其他办法解密数据
 * 所有代码开源, 不会存在任何抽水! 也不会开发反抽水(请尊重软件开发者)! 
 
+
 ## 安装
 在 [Releases](https://github.com/PerrorOne/miner-proxy/releases) 选择适合你系统的二进制文件下载
+### 您也可以自行编译
+* golang version >= 1.13
+* git clone https://github.com/PerrorOne/miner-proxy && cd miner-proxy
+* go mod tidy && cd ./cmd/run && go build .
+
 
 ## 使用
 * 分为服务端以及客户端
