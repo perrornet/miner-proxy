@@ -5,7 +5,7 @@
 * 所有代码开源, 不会存在任何抽水! 也不会开发反抽水(请尊重软件开发者)! 
 
 ## 安装
-在Releases选择适合你系统的二进制文件下载
+在 [Releases](https://github.com/PerrorOne/miner-proxy/releases) 选择适合你系统的二进制文件下载
 
 ## 使用
 * 分为服务端以及客户端
