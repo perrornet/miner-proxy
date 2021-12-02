@@ -158,13 +158,9 @@ func (p *Package) String() string {
 func (p *Package) Read(reader io.Reader, f func(Package)) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if len(data) == 0 {
-			return 0, nil, nil
-		}
 		data = bytes.TrimLeftFunc(data, func(r rune) bool {
 			return r == 0
 		})
-
 		if !atEOF && data[0] == uint8(PackageStart) {
 			if len(data) > 11 {
 				length, err := strconv.Atoi(strings.ReplaceAll(string(data[1:11]), "-", ""))
@@ -178,11 +174,10 @@ func (p *Package) Read(reader io.Reader, f func(Package)) error {
 		}
 		return
 	})
-	//scanner.Buffer()
 	for scanner.Scan() {
 		data := scanner.Bytes()
 		if len(data) == 0 {
-			return nil
+			return io.EOF
 		}
 		scannedPack := new(Package)
 		if err := scannedPack.Unpack(bytes.NewReader(scanner.Bytes())); err != nil {

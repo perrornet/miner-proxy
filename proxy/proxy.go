@@ -224,12 +224,12 @@ func (p *Proxy) ReadByPlaintextSendEncryption(reader io.Reader, writer io.Writer
 		return err
 	}
 	data = data[:n]
-
+	t := time.Now()
 	EnData, err := p.EncryptionData(data)
 	if err != nil {
 		return err
 	}
-	p.Log.Debug("读取到 %d 明文数据, 加密后数据大小 %d", n, len(EnData))
+	p.Log.Debug("读取到 %d 明文数据, 加密后数据大小 %d; 加密耗时 %s", n, len(EnData), time.Since(t))
 	atomic.AddUint64(&totalSize, uint64(len(EnData)))
 	return NewPackage(EnData).Pack(writer)
 }
@@ -250,7 +250,7 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 		}
 	})
 	if readErr != nil {
-		return err
+		return readErr
 	}
 	return err
 }
@@ -271,7 +271,8 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	p.Log.Debug("开始 %s", name)
 	name = fmt.Sprintf("%s error ", name) + "%s"
 	for {
-		if err := f(src, dst); err != nil {
+		err := f(src, dst)
+		if err != nil {
 			p.err(name, err)
 			return
 		}
