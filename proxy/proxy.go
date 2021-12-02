@@ -1,10 +1,10 @@
 package proxy
 
 import (
-	"bytes"
 	"crypto/tls"
-	"encoding/hex"
+	"fmt"
 	"github.com/dustin/go-humanize"
+	"github.com/jmcvetta/randutil"
 	"io"
 	"log"
 	"miner-proxy/pkg"
@@ -29,11 +29,12 @@ type Proxy struct {
 	Replacer func([]byte) []byte
 
 	// Settings
-	Nagles    bool
-	Log       pkg.Logger
-	OutputHex bool
-	SecretKey string
-	IsClient  bool
+	Nagles               bool
+	Log                  pkg.Logger
+	OutputHex            bool
+	SecretKey            string
+	IsClient             bool
+	UseSendConfusionData bool
 }
 
 var (
@@ -67,14 +68,22 @@ type setNoDelayer interface {
 	SetNoDelay(bool) error
 }
 
-var once sync.Once
+var (
+	once      sync.Once
+	startTime = time.Now()
+)
 
 func (p Proxy) TimerPrint() {
 	once.Do(func() {
 		t := time.Now()
 		for range time.Tick(time.Second * 30) {
 			total := atomic.LoadUint64(&totalSize)
-			log.Printf("从 %s 至现在总计加密转发 %s 数据\n", t.Format("2006-01-02 15:04:05"), humanize.Bytes(total))
+
+			log.Printf("从 %s 至现在总计加密转发 %s 数据; 平均转发速度 %s/秒 \n",
+				t.Format("2006-01-02 15:04:05"),
+				humanize.Bytes(total),
+				humanize.Bytes(uint64(float64(total)/time.Since(startTime).Seconds())),
+			)
 		}
 	})
 
@@ -82,6 +91,7 @@ func (p Proxy) TimerPrint() {
 
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
+	defer pkg.Recover(true)
 	defer p.lconn.Close()
 	go p.TimerPrint()
 	var err error
@@ -111,8 +121,8 @@ func (p *Proxy) Start() {
 	p.Log.Info("Opened %s >>> %s", p.laddr.String(), p.raddr.String())
 
 	//bidirectional copy
-	go p.pipe(p.lconn, p.rconn, true)
-	go p.pipe(p.rconn, p.lconn, false)
+	go p.pipe(p.lconn, p.rconn)
+	go p.pipe(p.rconn, p.lconn)
 
 	//wait for close...
 	<-p.errsig
@@ -123,111 +133,147 @@ func (p *Proxy) err(s string, err error) {
 	if p.erred {
 		return
 	}
-	//if err != io.EOF {
-	p.Log.Warn(s, err)
-	//}
+	if err != io.EOF {
+		p.Log.Warn(s, err)
+	}
 	p.errsig <- true
 	p.erred = true
 }
 
 var (
-	proxyStart    = []byte{115, 116, 97, 114, 116, 45, 112, 114, 111, 120, 121, 45, 101, 110, 99, 114, 121, 112, 116, 105, 111, 110}
-	proxyStartStr = string(proxyStart)
-	proxyEnd      = []byte{115, 116, 97, 114, 116, 45, 112, 114, 111, 120, 121, 45, 101, 110, 100}
-	proxyEndStr   = string(proxyEnd)
+	proxyStart = []byte{87, 62, 64, 57, 136, 6, 18, 50, 118, 135, 214, 247}
+	proxyEnd   = []byte{93, 124, 242, 154, 241, 48, 161, 242, 209, 90, 73, 163}
+	// proxyJustConfusionStart 只是混淆数据才回使用的开头
+	//proxyJustConfusionStart = []byte{113,158,190,157,204,56,4,142,189,85,168,56}
+	proxyConfusionStart = []byte{178, 254, 235, 166, 15, 61, 52, 198, 83, 207, 6, 83, 183, 115, 50, 58, 110, 6, 13, 60, 143, 242, 254, 143}
+	proxyConfusionEnd   = []byte{114, 44, 203, 23, 55, 50, 148, 231, 241, 154, 112, 180, 115, 126, 148, 149, 180, 55, 115, 242, 98, 119, 170, 249}
 )
 
-func (p *Proxy) pipe(src, dst io.ReadWriter, sendServer bool) {
-	islocal := src == p.lconn
-
-	var dataDirection string
-	if islocal {
-		dataDirection = "local >>>  server %d bytes sent%s"
-	} else {
-		dataDirection = "server >>> local %d bytes recieved%s"
+// separateConfusionData 分离混淆的数据
+func (p *Proxy) separateConfusionData(data []byte) []byte {
+	if !p.UseSendConfusionData {
+		return data
 	}
-
-	var byteFormat string
-	if p.OutputHex {
-		byteFormat = "%x"
-	} else {
-		byteFormat = "%s"
+	var result = make([]byte, 0, len(data)/2)
+	for index, v := range data {
+		if index%2 == 0 {
+			continue
+		}
+		result = append(result, v)
 	}
+	return result
+}
 
-	//directional copy (64k buffer)
-	buff := make([]byte, 1024)
-	for {
-		n, err := src.Read(buff)
-		if err != nil && err != io.EOF {
-			p.err("Read failed '%s'\n", err)
-			return
+// buildConfusionData 构建混淆数据
+// 从 10 - 135中随机一个数字作为本次随机数据的长度 N
+// 循环 N 次, 每次从 1 - 255 中随机一个数字作为本次随机数据
+// 最后在头部加入 proxyConfusionStart 尾部加入 proxyConfusionStart
+func (p *Proxy) buildConfusionData() []byte {
+	number, _ := randutil.IntRange(10, 135)
+	var data = make([]byte, number)
+	for i := 0; i < number; i++ {
+		index, _ := randutil.IntRange(1, 255)
+		data[i] = uint8(index)
+	}
+	data = append(data, proxyConfusionEnd...)
+	return append(proxyConfusionStart, data...)
+}
+
+// EncryptionData 构建需要发送的加密数据
+// 先使用 SecretKey aes 加密 data 如果 UseSendConfusionData 等于 true
+// 那么将会每25个字符插入 buildConfusionData 生成的随机字符
+func (p *Proxy) EncryptionData(data []byte) ([]byte, error) {
+	if p.UseSendConfusionData { // 插入随机混淆数据
+		confusionData := p.buildConfusionData()
+		confusionData = confusionData[len(proxyConfusionStart) : len(confusionData)-len(proxyConfusionEnd)]
+		var result []byte
+		for _, v := range data {
+			result = append(result, confusionData[0])
+			confusionData = append(confusionData[1:], confusionData[0])
+			result = append(result, v)
 		}
-		b := buff[:n]
+		data = result
+	}
+	data, err := pkg.AesEncrypt(data, []byte(p.SecretKey))
+	if err != nil {
+		return nil, err
+	}
+	data = append(proxyStart, data...)
+	return append(data, proxyEnd...), nil
+}
 
-		//execute match
-		if p.Matcher != nil {
-			p.Matcher(b)
-		}
+// DecryptData 解密数据
+func (p *Proxy) DecryptData(data []byte) ([]byte, error) {
+	data = data[len(proxyStart) : len(data)-len(proxyEnd)]
 
-		//execute replace
-		if p.Replacer != nil {
-			b = p.Replacer(b)
-		}
+	data, err := pkg.AesDecrypt(data, []byte(p.SecretKey))
+	if err != nil {
+		return nil, err
+	}
+	if p.UseSendConfusionData { // 去除随机混淆数据
+		data = p.separateConfusionData(data)
+	}
+	return data, nil
+}
 
-		//show output
-		p.Log.Debug(dataDirection, n, "")
-		p.Log.Trace(byteFormat, b)
-		if p.SecretKey != "" {
-			if bytes.HasPrefix(b, proxyStart) {
+// ReadByPlaintextSendEncryption 读取明文, 发送加密数据
+func (p *Proxy) ReadByPlaintextSendEncryption(reader io.Reader, writer io.Writer) error {
+	data := make([]byte, 1024)
+	n, err := reader.Read(data)
+	if err != nil {
+		return err
+	}
+	data = data[:n]
 
-				for !bytes.Contains(b, proxyEnd) {
-					var temp = make([]byte, 1)
-					n, err := src.Read(temp)
-					if err != nil {
-						p.err("Read proxyEnd failed '%s'\n", err)
-						return
-					}
-					if len(temp) == 0 {
-						continue
-					}
+	EnData, err := p.EncryptionData(data)
+	if err != nil {
+		return err
+	}
+	p.Log.Debug("读取到 %d 明文数据, 加密后数据大小 %d", n, len(EnData))
+	atomic.AddUint64(&totalSize, uint64(len(EnData)))
+	return NewPackage(EnData).Pack(writer)
+}
 
-					b = append(b, temp[:n]...)
-				}
-				b = bytes.ReplaceAll(b, proxyEnd, nil)
-				p.Log.Debug("接受到加密数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
-				b, err = pkg.AesDecrypt(bytes.ReplaceAll(b, proxyStart, nil), []byte(p.SecretKey))
-			}
-
-			if p.IsClient && sendServer { // 如果是客户端并且发送到服务端的数据全加密
-				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
-				b = append(proxyStart, b...)
-				b = append(b, proxyEnd...)
-				p.Log.Debug("发送到服务端数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
-			}
-
-			if !p.IsClient && !sendServer {
-				b, err = pkg.AesEncrypt(b, []byte(p.SecretKey))
-				b = append(proxyStart, b...)
-				b = append(b, proxyEnd...)
-				p.Log.Debug("发送到客户端数据包, 加密数据: %s; 数据大小: %d", hex.Dump(b)[:55], len(b))
-			}
-
-			if err != nil {
-				p.err("Encryption or decryption\n\n failed '%s'\n", err)
-				return
-			}
-		}
-
-		atomic.AddUint64(&totalSize, uint64(len(b)))
-		n, err = dst.Write(b)
+// ReadEncryptionSendPlaintext 读取加密数据, 发送明文
+func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) error {
+	var err error
+	readErr := new(Package).Read(reader, func(pck Package) {
+		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
-			p.err("Write failed '%s'\n", err)
-			return
+			p.err("DecryptData error %s", err)
 		}
-		if islocal {
-			p.sentBytes += uint64(n)
-		} else {
-			p.receivedBytes += uint64(n)
+		p.Log.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
+		atomic.AddUint64(&totalSize, uint64(len(pck.Data)))
+		_, err = writer.Write(deData)
+		if err != nil {
+			fmt.Println(err)
+		}
+	})
+	if readErr != nil {
+		return err
+	}
+	return err
+}
+
+func (p *Proxy) pipe(src, dst io.ReadWriter) {
+	defer pkg.Recover(true)
+	islocal := src == p.lconn
+	var f func(reader io.Reader, writer io.Writer) error
+	var name string
+	switch {
+	case p.IsClient == islocal:
+		name = "读取明文, 发送加密数据"
+		f = p.ReadByPlaintextSendEncryption
+	default:
+		name = "读取加密数据, 发送明文"
+		f = p.ReadEncryptionSendPlaintext
+	}
+	p.Log.Debug("开始 %s", name)
+	name = fmt.Sprintf("%s error ", name) + "%s"
+	for {
+		if err := f(src, dst); err != nil {
+			p.err(name, err)
+			return
 		}
 	}
 }

@@ -18,17 +18,18 @@ var (
 	connid  = uint64(0)
 	logger  pkg.Logger
 
-	localAddr  = flag.String("l", ":9999", "本地监听地址")
-	remoteAddr = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
-	secretKey  = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
-	isClient   = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
-	debug      = flag.Bool("debug", false, "是否开启debug")
-	install    = flag.Bool("install", false, "添加到系统服务, 并且开机自动启动")
-	remove     = flag.Bool("remove", false, "移除系统服务, 并且关闭开机自动启动")
-	stop       = flag.Bool("stop", false, "暂停代理服务")
-	restart    = flag.Bool("restart", false, "重启代理服务")
-	start      = flag.Bool("start", false, "启动代理服务")
-	stat       = flag.Bool("stat", false, "查看代理服务状态")
+	localAddr            = flag.String("l", ":9999", "本地监听地址")
+	remoteAddr           = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
+	secretKey            = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
+	isClient             = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
+	UseSendConfusionData = flag.Bool("sc", false, "是否使用混淆数据, 如果指定了, 将会不定时在server/client之间发送随机的混淆数据以及在挖矿数据中插入随机数据")
+	debug                = flag.Bool("debug", false, "是否开启debug")
+	install              = flag.Bool("install", false, "添加到系统服务, 并且开机自动启动")
+	remove               = flag.Bool("remove", false, "移除系统服务, 并且关闭开机自动启动")
+	stop                 = flag.Bool("stop", false, "暂停代理服务")
+	restart              = flag.Bool("restart", false, "重启代理服务")
+	start                = flag.Bool("start", false, "启动代理服务")
+	stat                 = flag.Bool("stat", false, "查看代理服务状态")
 )
 
 type proxyService struct{}
@@ -39,6 +40,7 @@ func (p *proxyService) Start(s service.Service) error {
 }
 
 func (p *proxyService) run() {
+
 	logger := pkg.ColorLogger{}
 
 	logger.Info("miner-proxy (%s) proxing from %v to %v ", version, *localAddr, *remoteAddr)
@@ -74,8 +76,9 @@ func (p *proxyService) run() {
 		p := proxy.New(conn, laddr, raddr)
 		p.SecretKey = *secretKey
 		p.IsClient = *isClient
+		p.UseSendConfusionData = *UseSendConfusionData
 		p.Log = pkg.ColorLogger{
-			Prefix:  fmt.Sprintf("Connection #%03d ", connid),
+			Prefix:  fmt.Sprintf("Connection %v #%03d ", isClient, connid),
 			Verbose: *debug,
 		}
 		go p.Start()

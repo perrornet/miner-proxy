@@ -22,6 +22,12 @@ func PKCS7UnPadding(origData []byte) []byte {
 
 // AES加密,CBC
 func AesEncrypt(origData, key []byte) ([]byte, error) {
+	//defer func() {
+	//	if err := recover(); err != nil{
+	//		log.Println("[ERROR]: AesEncrypt error: ", err)
+	//	}
+	//}()
+	//log.Printf("AesEncrypt data size: %d", len(origData))
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -35,7 +41,13 @@ func AesEncrypt(origData, key []byte) ([]byte, error) {
 }
 
 // AES解密
-func AesDecrypt(crypted, key []byte) ([]byte, error) {
+func AesDecrypt(crypted, key []byte) (result []byte, err error) {
+	//defer func() {
+	//	if err := recover(); err != nil{
+	//		log.Printf("[ERROR]: AesDecrypt error: %s ; data size: %d", err, len(crypted))
+	//	}
+	//}()
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -45,5 +57,6 @@ func AesDecrypt(crypted, key []byte) ([]byte, error) {
 	origData := make([]byte, len(crypted))
 	blockMode.CryptBlocks(origData, crypted)
 	origData = PKCS7UnPadding(origData)
+	//log.Printf("AesDecrypt data size: %d", len(origData))
 	return origData, nil
 }
