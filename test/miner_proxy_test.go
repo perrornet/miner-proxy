@@ -35,10 +35,7 @@ func runMinerProxy(secretKey, remoteAddr string, isClient bool, port *int) error
 			p := proxy.New(conn, laddr, raddr)
 			p.SecretKey = secretKey
 			p.IsClient = isClient
-			p.Log = pkg.ColorLogger{
-				Prefix:  fmt.Sprintf("client: %v: ", isClient),
-				Verbose: true,
-			}
+			p.Log = pkg.ColorLogger{}
 			go p.Start()
 		}
 	}()
@@ -127,22 +124,7 @@ func TestMinerProxyHasEncryption(t *testing.T) {
 	}
 	data = data[:n]
 	if bytes.Equal(data, []byte("1")) {
-		t.Fatalf("数据不相等!, got %s, want to 1", string(data))
+		t.Fatalf("数据没有加密!!, got %s, want to 1", string(data))
 	}
-	if !bytes.HasPrefix(data, []byte("start-proxy-encryption")) {
-		t.Fatalf("数据未加密, 因为数据没有 start-proxy-encryption 前缀")
-	}
-	if !bytes.HasSuffix(data, []byte("start-proxy-end")) {
-		t.Fatalf("数据未加密, 因为数据没有 tart-proxy-end 后缀")
-	}
-	data = bytes.TrimLeft(data, "start-proxy-encryption")
-	data = bytes.TrimRight(data, "start-proxy-end")
-	// 解密数据
-	data, err = pkg.AesDecrypt(data, []byte(secretKey))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(data, []byte("1")) {
-		t.Fatalf("解密后数据不相等! got %s, want to 1", string(data))
-	}
+
 }
