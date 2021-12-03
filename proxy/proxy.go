@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"github.com/dustin/go-humanize"
@@ -124,6 +125,10 @@ func (p *Proxy) Start() {
 	go p.pipe(p.lconn, p.rconn)
 	go p.pipe(p.rconn, p.lconn)
 
+	if !p.IsClient { // 由于挖矿的特性, 只需要在服务端向客户端 发送随机数据
+		go p.SendRandomData(p.lconn)
+	}
+
 	//wait for close...
 	<-p.errsig
 	p.Log.Info("Closed (%d bytes sent, %d bytes recieved)", p.sentBytes, p.receivedBytes)
@@ -147,7 +152,22 @@ var (
 	//proxyJustConfusionStart = []byte{113,158,190,157,204,56,4,142,189,85,168,56}
 	proxyConfusionStart = []byte{178, 254, 235, 166, 15, 61, 52, 198, 83, 207, 6, 83, 183, 115, 50, 58, 110, 6, 13, 60, 143, 242, 254, 143}
 	proxyConfusionEnd   = []byte{114, 44, 203, 23, 55, 50, 148, 231, 241, 154, 112, 180, 115, 126, 148, 149, 180, 55, 115, 242, 98, 119, 170, 249}
+	randomStart         = []byte("random-proxy")
+	// 启动时随机生成
+	randomPingData [][]byte
 )
+
+func init() {
+	for i := 0; i < 1000; i++ {
+		dataLength, _ := randutil.IntRange(10, 102)
+		var temp = make([]byte, dataLength)
+		for l := 0; l < dataLength; l++ {
+			char, _ := randutil.IntRange(0, 255)
+			temp[l] = uint8(char)
+		}
+		randomPingData = append(randomPingData, temp)
+	}
+}
 
 // separateConfusionData 分离混淆的数据
 func (p *Proxy) separateConfusionData(data []byte) []byte {
@@ -242,6 +262,10 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 		if err != nil {
 			p.err("DecryptData error %s", err)
 		}
+		if bytes.HasPrefix(deData, randomStart) {
+			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			return
+		}
 		p.Log.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
 		atomic.AddUint64(&totalSize, uint64(len(pck.Data)))
 		_, err = writer.Write(deData)
@@ -253,6 +277,24 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 		return readErr
 	}
 	return err
+}
+
+func (p *Proxy) SendRandomData(dst io.Writer) {
+	sleepTime, _ := randutil.IntRange(3, 15)
+	for {
+		time.Sleep(time.Second * time.Duration(sleepTime))
+
+		// 写入随机数据
+		index, _ := randutil.IntRange(0, len(randomPingData))
+		data, err := p.EncryptionData(append(randomStart, randomPingData[index]...))
+		if err != nil {
+			return
+		}
+		p.Log.Debug("向客户端写入随机混淆数据 %d", len(data))
+		if err := NewPackage(data).Pack(dst); err != nil {
+			return
+		}
+	}
 }
 
 func (p *Proxy) pipe(src, dst io.ReadWriter) {
