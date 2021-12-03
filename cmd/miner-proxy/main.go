@@ -77,10 +77,18 @@ func (p *proxyService) run() {
 		p.SecretKey = *secretKey
 		p.IsClient = *isClient
 		p.UseSendConfusionData = *UseSendConfusionData
-		p.Log = pkg.ColorLogger{
-			Prefix:  fmt.Sprintf("Connection %v #%03d ", isClient, connid),
+		l := pkg.ColorLogger{
 			Verbose: *debug,
 		}
+		if *isClient {
+			l.Prefix = fmt.Sprintf("connection %s>> ", raddr.String())
+		}
+
+		if !*isClient {
+			l.Prefix = fmt.Sprintf("connection %s>> ", conn.RemoteAddr().String())
+		}
+
+		p.Log = l
 		go p.Start()
 	}
 }
