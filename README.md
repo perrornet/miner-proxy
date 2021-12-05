@@ -1,6 +1,6 @@
 # tcp 加密代理
 * 可以自定义密码通过AES对称加密流量,任何人都无法获悉流量数据包, 只要你的secret_key设置的足够复杂,几乎不可能破解
-* 可以设置多矿工数据进行混淆处理, 如果使用了-sc参数, 将会对已经加密的数据插入同等数量的随机字符, 注意**这会导致带宽使用量翻倍**
+* 可以设置对矿工数据进行混淆处理, 如果使用了-sc参数, 将会对已经加密的数据插入同等数量的随机字符, 注意**这会导致带宽使用量翻倍**
 * 本程序是为了国内挖矿流量加密而设置, 客户端运行在矿场局域网任意一台机器内, 服务端可以选择在香港云服务器上
 * 不同与其他ssl加密代理, ssl加密依旧可以通过中间人的方式去篡改数据, 而采用这种方式, 除非你的密钥泄露再无其他办法解密数据
 * 所有代码开源, 不会存在任何抽水! 也不会开发反抽水(请尊重软件开发者)! 
@@ -15,6 +15,45 @@
 
 
 ## 使用
+### win 端使用
+#### 启动服务, 无界面运行, 并且开机启动(推荐)
+1. 按住 win + R 输入 cmd 回车
+2. 安装服务
+```
+# 在cmd中输入以下命令
+完整目录/miner-proxy_windows_amd64.exe -l :5555 -r 服务端ip:服务端端口 -secret_key xxxx -sc -install -client
+```
+3.  启动服务
+```
+完整目录/miner-proxy_windows_amd64.exe -start
+```
+#### 不启动服务, 有界面运行, 并且开机启动
+1. 新建 start-miner-proxy.bat 文件写入一下内容
+```
+完整目录/miner-proxy_windows_amd64.exe -l :5555 -r 服务端ip:服务端端口 -secret_key xxxx -sc -client
+```
+2. 按住 win + R 输入 shell:startup 回车将会打开一个目录, 将bat文件放在该目录下, 点击bat文件运行
+
+### linux 端使用
+#### 创建服务启动(推荐)
+1. 安装服务: `完整目录/miner-proxy_linux_amd64 -l :5555 -r 矿池域名:矿池端口 -secret_key xxxx -sc -install`
+2. 启动服务: `完整目录/miner-proxy_linux_amd64 -start`
+2. 查看服务状态: `完整目录/miner-proxy_linux_amd64 -stat`
+#### 通过supervisor启动
+1. 安装supervisor, 请自行搜索supervisor在您系统中的安装方式
+2. 写入配置文件, 输入命令: `vim /etc/supervisor/conf.d/miner-proxy.init`
+3. 按i键进行编辑, 复制一下内容到文件中, 并将"完整目录"替换为 miner-proxy_linux_amd64 所在的目录
+```
+[program:miner-proxy]
+command=完整目录/miner-proxy_linux_amd64 -l :5555 -r 矿池域名:矿池端口 -secret_key xxxx -sc
+stdout_logfile=完整目录/miner-proxy.log
+autostart=true
+autorestart=true
+ikillasgroup=true
+```
+4. 按ESC键, 随后输入:wq回车后即可保存
+5. 输入命令: `supervisorctl reload && supervisorctl start miner-proxy && supervisorctl status`
+
 ### 参数说明
 ```
   -client
@@ -151,5 +190,3 @@ nbminer.exe -a ergo -o stratum+tcp://127.0.0.1:34568 -u perror.test -mt 3
 2. ![](./images/hiveos-add-02.png)
 3. ![](./images/hiveos-add-pool.png)
 4. 点击"应用"后再点击更新即可
-
-### 本程序基础转发代码来自 https://github.com/jpillora/miner-proxy 存储库
