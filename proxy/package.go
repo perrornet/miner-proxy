@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/hex"
 	"errors"
@@ -11,7 +10,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 type BufferedConn struct {
@@ -19,27 +17,6 @@ type BufferedConn struct {
 	pos  int
 	buf  []byte
 	size int
-}
-
-func NewBufferedConn(conn io.Reader) *BufferedConn {
-	size := 2048 // default size of buf
-	buf := make([]byte, size)
-	return &BufferedConn{
-		conn: conn,
-		pos:  0,
-		buf:  buf,
-		size: size,
-	}
-}
-
-func NewBufferedConnWithSize(conn io.Reader, size int) *BufferedConn {
-	buf := make([]byte, size)
-	return &BufferedConn{
-		conn: conn,
-		pos:  0,
-		buf:  buf,
-		size: size,
-	}
 }
 
 func (bc *BufferedConn) Read() error {
@@ -102,10 +79,6 @@ func (bc *BufferedConn) Clear(position int) error {
 
 var PackageStart = 'P'
 
-var PackagePool = sync.Pool{New: func() interface{} {
-	return new(Package)
-}}
-
 type Package struct {
 	Length int
 	Data   []byte
@@ -156,34 +129,38 @@ func (p *Package) String() string {
 }
 
 func (p *Package) Read(reader io.Reader, f func(Package)) error {
-	scanner := bufio.NewScanner(reader)
-	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		data = bytes.TrimLeftFunc(data, func(r rune) bool {
-			return r == 0
-		})
-		if !atEOF && data[0] == uint8(PackageStart) {
-			if len(data) > 11 {
-				length, err := strconv.Atoi(strings.ReplaceAll(string(data[1:11]), "-", ""))
-				if err != nil {
-					return 0, nil, err
-				}
-				if int(length+11) <= len(data) {
-					return length + 11, data[11 : int(length)+11], nil
-				}
+	var data = make([]byte, 1)
+	var buf []byte
+	var length int
+	for {
+		n, err := reader.Read(data)
+		if err != nil {
+			return err
+		}
+		if data[0] == uint8(PackageStart) {
+			// 再读取 11个字节
+			data = make([]byte, 10)
+			continue
+		}
+		if len(data[:n]) == 10 && bytes.Contains(data[:n], []byte("-")) {
+			dataLength, err := strconv.Atoi(strings.ReplaceAll(string(data[:n]), "-", ""))
+			if err != nil {
+				return err
 			}
+			data = make([]byte, dataLength)
+			length = dataLength
+			continue
 		}
-		return
-	})
-	for scanner.Scan() {
-		data := scanner.Bytes()
-		if len(data) == 0 {
-			return io.EOF
+		buf = append(buf, data[:n]...)
+		if len(buf) < length-1 {
+			data = make([]byte, length-len(buf))
+			continue
 		}
-		scannedPack := new(Package)
-		if err := scannedPack.Unpack(bytes.NewReader(scanner.Bytes())); err != nil {
-			return fmt.Errorf("unpack error: %s", err)
-		}
-		f(*scannedPack)
+
+		f(Package{
+			Length: n,
+			Data:   buf,
+		})
+		return nil
 	}
-	return scanner.Err()
 }

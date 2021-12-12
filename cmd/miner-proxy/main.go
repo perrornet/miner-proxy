@@ -13,13 +13,10 @@ import (
 )
 
 var (
-	version = "0.0.0-src"
-	matchid = uint64(0)
-	connid  = uint64(0)
-	logger  pkg.Logger
-
+	version              = "0.0.0-src"
 	localAddr            = flag.String("l", ":9999", "本地监听地址")
 	remoteAddr           = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
+	SendRemoteAddr       = flag.String("sr", "", "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接")
 	secretKey            = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
 	isClient             = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
 	UseSendConfusionData = flag.Bool("sc", false, "是否使用混淆数据, 如果指定了, 将会不定时在server/client之间发送随机的混淆数据以及在挖矿数据中插入随机数据")
@@ -34,7 +31,7 @@ var (
 
 type proxyService struct{}
 
-func (p *proxyService) Start(s service.Service) error {
+func (p *proxyService) Start(_ service.Service) error {
 	go p.run()
 	return nil
 }
@@ -60,6 +57,7 @@ func (p *proxyService) run() {
 		logger.Warn("Failed to open local port to listen: %s", err)
 		os.Exit(1)
 	}
+
 	if len(*secretKey)%16 != 0 {
 		for len(*secretKey)%16 != 0 {
 			*secretKey += "0"
@@ -72,12 +70,12 @@ func (p *proxyService) run() {
 			logger.Warn("Failed to accept connection '%s'", err)
 			continue
 		}
-		connid++
 		p := proxy.New(conn, laddr, raddr)
 		p.SecretKey = *secretKey
 		p.IsClient = *isClient
+		p.SendRemoteAddr = *SendRemoteAddr
 		p.UseSendConfusionData = *UseSendConfusionData
-		l := pkg.ColorLogger{
+		l := &pkg.ColorLogger{
 			Verbose: *debug,
 		}
 		if *isClient {
@@ -87,13 +85,12 @@ func (p *proxyService) run() {
 		if !*isClient {
 			l.Prefix = fmt.Sprintf("connection %s>> ", conn.RemoteAddr().String())
 		}
-
 		p.Log = l
 		go p.Start()
 	}
 }
 
-func (p *proxyService) Stop(s service.Service) error {
+func (p *proxyService) Stop(_ service.Service) error {
 	return nil
 }
 
@@ -181,5 +178,5 @@ func main() {
 		log.Println("启动代理服务成功")
 		return
 	}
-	s.Run()
+	_ = s.Run()
 }

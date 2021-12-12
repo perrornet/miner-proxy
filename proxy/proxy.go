@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"github.com/dustin/go-humanize"
 	"github.com/jmcvetta/randutil"
@@ -23,7 +22,6 @@ type Proxy struct {
 	lconn, rconn  io.ReadWriteCloser
 	erred         bool
 	errsig        chan bool
-	tlsUnwrapp    bool
 	tlsAddress    string
 
 	Matcher  func([]byte)
@@ -35,6 +33,7 @@ type Proxy struct {
 	OutputHex            bool
 	SecretKey            string
 	IsClient             bool
+	SendRemoteAddr       string
 	UseSendConfusionData bool
 }
 
@@ -53,20 +52,6 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 		errsig: make(chan bool),
 		Log:    pkg.NullLogger{},
 	}
-}
-
-// NewTLSUnwrapped - Create a new Proxy instance with a remote TLS server for
-// which we want to unwrap the TLS to be able to connect without encryption
-// locally
-func NewTLSUnwrapped(lconn *net.TCPConn, laddr, raddr *net.TCPAddr, addr string) *Proxy {
-	p := New(lconn, laddr, raddr)
-	p.tlsUnwrapp = true
-	p.tlsAddress = addr
-	return p
-}
-
-type setNoDelayer interface {
-	SetNoDelay(bool) error
 }
 
 var (
@@ -95,31 +80,13 @@ func (p *Proxy) Start() {
 	defer pkg.Recover(true)
 	defer p.lconn.Close()
 	go p.TimerPrint()
-	var err error
-	//connect to remote
-	if p.tlsUnwrapp {
-		p.rconn, err = tls.Dial("tcp", p.tlsAddress, nil)
-	} else {
-		p.rconn, err = net.DialTCP("tcp", nil, p.raddr)
-	}
+	conn, err := p.connRemote()
 	if err != nil {
-		p.Log.Warn("Remote connection failed: %s", err)
+		p.err("Remote connection failed: %s", err)
 		return
 	}
+	p.rconn = conn
 	defer p.rconn.Close()
-
-	//nagles?
-	if p.Nagles {
-		if conn, ok := p.lconn.(setNoDelayer); ok {
-			conn.SetNoDelay(true)
-		}
-		if conn, ok := p.rconn.(setNoDelayer); ok {
-			conn.SetNoDelay(true)
-		}
-	}
-
-	//display both ends
-	p.Log.Info("Opened %s >>> %s", p.laddr.String(), p.raddr.String())
 
 	//bidirectional copy
 	go p.pipe(p.lconn, p.rconn)
@@ -295,6 +262,75 @@ func (p *Proxy) SendRandomData(dst io.Writer) {
 			return
 		}
 	}
+}
+
+func (p *Proxy) connRemote() (net.Conn, error) {
+	if p.IsClient {
+		conn, err := net.Dial("tcp", p.raddr.String())
+		if err != nil {
+			return nil, err
+		}
+		p.Log.Info("Opened %s >>> %s", conn.LocalAddr().String(), conn.RemoteAddr())
+		if p.SendRemoteAddr == "" {
+			return conn, nil
+		}
+		EnData, err := p.EncryptionData([]byte(fmt.Sprintf("remote_address%s", p.SendRemoteAddr)))
+		if err != nil {
+			return nil, err
+		}
+		p.Log.Debug("向服务端发送远程地址: %s", p.SendRemoteAddr)
+		atomic.AddUint64(&totalSize, uint64(len(EnData)))
+		return conn, NewPackage(EnData).Pack(conn)
+	}
+
+	// 服务端读取远端数据
+	var conn net.Conn
+	var err error
+	err = new(Package).Read(p.lconn, func(pck Package) {
+		deData, err := p.DecryptData(pck.Data)
+		if err != nil {
+			p.err("DecryptData error %s", err)
+		}
+		if bytes.HasPrefix(deData, randomStart) {
+			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			return
+		}
+		if bytes.HasPrefix(deData, []byte("remote_address")) {
+			deData = bytes.Replace(deData, []byte("remote_address"), nil, 1)
+			p.Log.Debug("使用客户端指定的远程地址 %s", deData)
+			tcpAdder, err := net.ResolveTCPAddr("tcp", string(deData))
+			if err != nil {
+				p.err("连接客户端发送的远程地址失败", err)
+				return
+			}
+			p.raddr = tcpAdder
+			conn, err = net.Dial("tcp", p.raddr.String())
+			if err != nil {
+				p.err("连接远程地址失败", err)
+				return
+			}
+			if v, ok := p.Log.(*pkg.ColorLogger); ok {
+				v.Prefix = fmt.Sprintf("connection %s(客户端指定) >>", p.raddr.String())
+			}
+			p.Log.Info("Opened %s >>> %s", p.laddr.String(), tcpAdder.String())
+			return
+		}
+
+		// 直接使用服务端指定的远程地址
+		conn, err = net.Dial("tcp", p.raddr.String())
+		if err != nil {
+			p.err("连接远程地址失败", err)
+			return
+		}
+		p.Log.Info("Opened %s >>> %s", conn.LocalAddr().String(), conn.RemoteAddr().String())
+		_, err = conn.Write(deData)
+		if err != nil {
+			p.err("写入数据到远程地址失败", err)
+		}
+		return
+	})
+
+	return conn, err
 }
 
 func (p *Proxy) pipe(src, dst io.ReadWriter) {
