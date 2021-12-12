@@ -38,7 +38,8 @@ type Proxy struct {
 }
 
 var (
-	totalSize uint64
+	totalSize   uint64
+	onlineCount int64
 )
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
@@ -59,27 +60,29 @@ var (
 	startTime = time.Now()
 )
 
-func (p Proxy) TimerPrint() {
-	once.Do(func() {
+func init() {
+	go once.Do(func() {
 		t := time.Now()
 		for range time.Tick(time.Second * 30) {
 			total := atomic.LoadUint64(&totalSize)
-
-			log.Printf("从 %s 至现在总计加密转发 %s 数据; 平均转发速度 %s/秒 \n",
+			log.Printf("从 %s 至现在总计加密转发 %s 数据; 平均转发速度 %s/秒; 当前在线 %d 个客户端 \n",
 				t.Format("2006-01-02 15:04:05"),
 				humanize.Bytes(total),
 				humanize.Bytes(uint64(float64(total)/time.Since(startTime).Seconds())),
+				atomic.LoadInt64(&onlineCount),
 			)
 		}
 	})
-
 }
 
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer pkg.Recover(true)
 	defer p.lconn.Close()
-	go p.TimerPrint()
+	defer func() {
+		atomic.AddInt64(&onlineCount, -1)
+	}()
+	atomic.AddInt64(&onlineCount, 1)
 	conn, err := p.connRemote()
 	if err != nil {
 		p.err("Remote connection failed: %s", err)
