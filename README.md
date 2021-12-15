@@ -13,7 +13,7 @@
 ### 您也可以自行编译
 * golang version >= 1.13
 * `git clone https://github.com/PerrorOne/miner-proxy && cd miner-proxy`
-* `go mod tidy && cd ./cmd/miner && go build .`
+* `go mod tidy && cd ./cmd/miner-proxy && go build .`
 
 
 ## 使用
