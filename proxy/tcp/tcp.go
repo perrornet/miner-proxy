@@ -1,4 +1,4 @@
-package proxy
+package tcp
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"miner-proxy/pkg"
+	"miner-proxy/proxy"
+	"miner-proxy/proxy/encryption"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -44,7 +46,7 @@ var (
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
 // and closes it when finished.
-func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
+func NewTcp(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 	return &Proxy{
 		lconn:  lconn,
 		laddr:  laddr,
@@ -56,11 +58,23 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 }
 
 var (
-	once      sync.Once
-	startTime = time.Now()
+	once        sync.Once
+	startTime   = time.Now()
+	randomStart = []byte("random-proxy")
+	// 启动时随机生成
+	randomPingData [][]byte
 )
 
-func init() {
+func InitTcpData() {
+	for i := 0; i < 1000; i++ {
+		dataLength, _ := randutil.IntRange(10, 102)
+		var temp = make([]byte, dataLength)
+		for l := 0; l < dataLength; l++ {
+			char, _ := randutil.IntRange(0, 255)
+			temp[l] = uint8(char)
+		}
+		randomPingData = append(randomPingData, temp)
+	}
 	go once.Do(func() {
 		t := time.Now()
 		for range time.Tick(time.Second * 30) {
@@ -115,97 +129,6 @@ func (p *Proxy) err(s string, err error) {
 	p.erred = true
 }
 
-var (
-	proxyStart = []byte{87, 62, 64, 57, 136, 6, 18, 50, 118, 135, 214, 247}
-	proxyEnd   = []byte{93, 124, 242, 154, 241, 48, 161, 242, 209, 90, 73, 163}
-	// proxyJustConfusionStart 只是混淆数据才回使用的开头
-	//proxyJustConfusionStart = []byte{113,158,190,157,204,56,4,142,189,85,168,56}
-	proxyConfusionStart = []byte{178, 254, 235, 166, 15, 61, 52, 198, 83, 207, 6, 83, 183, 115, 50, 58, 110, 6, 13, 60, 143, 242, 254, 143}
-	proxyConfusionEnd   = []byte{114, 44, 203, 23, 55, 50, 148, 231, 241, 154, 112, 180, 115, 126, 148, 149, 180, 55, 115, 242, 98, 119, 170, 249}
-	randomStart         = []byte("random-proxy")
-	// 启动时随机生成
-	randomPingData [][]byte
-)
-
-func init() {
-	for i := 0; i < 1000; i++ {
-		dataLength, _ := randutil.IntRange(10, 102)
-		var temp = make([]byte, dataLength)
-		for l := 0; l < dataLength; l++ {
-			char, _ := randutil.IntRange(0, 255)
-			temp[l] = uint8(char)
-		}
-		randomPingData = append(randomPingData, temp)
-	}
-}
-
-// separateConfusionData 分离混淆的数据
-func (p *Proxy) separateConfusionData(data []byte) []byte {
-	if !p.UseSendConfusionData {
-		return data
-	}
-	var result = make([]byte, 0, len(data)/2)
-	for index, v := range data {
-		if index%2 == 0 {
-			continue
-		}
-		result = append(result, v)
-	}
-	return result
-}
-
-// buildConfusionData 构建混淆数据
-// 从 10 - 135中随机一个数字作为本次随机数据的长度 N
-// 循环 N 次, 每次从 1 - 255 中随机一个数字作为本次随机数据
-// 最后在头部加入 proxyConfusionStart 尾部加入 proxyConfusionStart
-func (p *Proxy) buildConfusionData() []byte {
-	number, _ := randutil.IntRange(10, 135)
-	var data = make([]byte, number)
-	for i := 0; i < number; i++ {
-		index, _ := randutil.IntRange(1, 255)
-		data[i] = uint8(index)
-	}
-	data = append(data, proxyConfusionEnd...)
-	return append(proxyConfusionStart, data...)
-}
-
-// EncryptionData 构建需要发送的加密数据
-// 先使用 SecretKey aes 加密 data 如果 UseSendConfusionData 等于 true
-// 那么将会每25个字符插入 buildConfusionData 生成的随机字符
-func (p *Proxy) EncryptionData(data []byte) ([]byte, error) {
-	if p.UseSendConfusionData { // 插入随机混淆数据
-		confusionData := p.buildConfusionData()
-		confusionData = confusionData[len(proxyConfusionStart) : len(confusionData)-len(proxyConfusionEnd)]
-		var result []byte
-		for _, v := range data {
-			result = append(result, confusionData[0])
-			confusionData = append(confusionData[1:], confusionData[0])
-			result = append(result, v)
-		}
-		data = result
-	}
-	data, err := pkg.AesEncrypt(data, []byte(p.SecretKey))
-	if err != nil {
-		return nil, err
-	}
-	data = append(proxyStart, data...)
-	return append(data, proxyEnd...), nil
-}
-
-// DecryptData 解密数据
-func (p *Proxy) DecryptData(data []byte) ([]byte, error) {
-	data = data[len(proxyStart) : len(data)-len(proxyEnd)]
-
-	data, err := pkg.AesDecrypt(data, []byte(p.SecretKey))
-	if err != nil {
-		return nil, err
-	}
-	if p.UseSendConfusionData { // 去除随机混淆数据
-		data = p.separateConfusionData(data)
-	}
-	return data, nil
-}
-
 // ReadByPlaintextSendEncryption 读取明文, 发送加密数据
 func (p *Proxy) ReadByPlaintextSendEncryption(reader io.Reader, writer io.Writer) error {
 	data := make([]byte, 1024)
@@ -215,32 +138,34 @@ func (p *Proxy) ReadByPlaintextSendEncryption(reader io.Reader, writer io.Writer
 	}
 	data = data[:n]
 	t := time.Now()
-	EnData, err := p.EncryptionData(data)
+	EnData, err := encryption.EncryptionData(data, p.UseSendConfusionData, p.SecretKey)
 	if err != nil {
 		return err
 	}
-	p.Log.Debug("读取到 %d 明文数据, 加密后数据大小 %d; 加密耗时 %s", n, len(EnData), time.Since(t))
+	p.Log.Debug("plaintext(%s) -%s> encryption(%s)", humanize.Bytes(uint64(len(data))), time.Since(t), humanize.Bytes(uint64(len(EnData))))
 	atomic.AddUint64(&totalSize, uint64(len(EnData)))
-	return NewPackage(EnData).Pack(writer)
+	return proxy.NewPackage(EnData).Pack(writer)
 }
 
 // ReadEncryptionSendPlaintext 读取加密数据, 发送明文
 func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) error {
 	var err error
-	readErr := new(Package).Read(reader, func(pck Package) {
-		deData, err := p.DecryptData(pck.Data)
+	readErr := new(proxy.Package).Read(reader, func(pck proxy.Package) {
+		t := time.Now()
+		deData, err := encryption.DecryptData(pck.Data, p.UseSendConfusionData, p.SecretKey)
 		if err != nil {
 			p.err("DecryptData error %s", err)
 		}
 		if bytes.HasPrefix(deData, randomStart) {
-			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			p.Log.Debug("get random confusion data %s", humanize.Bytes(uint64(len(deData))))
 			return
 		}
-		p.Log.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
+		p.Log.Debug("encryption(%s) -%s> plaintext(%s)", humanize.Bytes(uint64(len(pck.Data))), time.Since(t), humanize.Bytes(uint64(len(deData))))
 		atomic.AddUint64(&totalSize, uint64(len(pck.Data)))
 		_, err = writer.Write(deData)
 		if err != nil {
-			fmt.Println(err)
+			p.err("write data to server or client error", err)
+			return
 		}
 	})
 	if readErr != nil {
@@ -256,12 +181,12 @@ func (p *Proxy) SendRandomData(dst io.Writer) {
 
 		// 写入随机数据
 		index, _ := randutil.IntRange(0, len(randomPingData))
-		data, err := p.EncryptionData(append(randomStart, randomPingData[index]...))
+		data, err := encryption.EncryptionData(append(randomStart, randomPingData[index]...), p.UseSendConfusionData, p.SecretKey)
 		if err != nil {
 			return
 		}
-		p.Log.Debug("向客户端写入随机混淆数据 %d", len(data))
-		if err := NewPackage(data).Pack(dst); err != nil {
+		p.Log.Debug("write random confusion data to client, data size %s", humanize.Bytes(uint64(len(data))))
+		if err := proxy.NewPackage(data).Pack(dst); err != nil {
 			return
 		}
 	}
@@ -277,43 +202,44 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 		if p.SendRemoteAddr == "" {
 			return conn, nil
 		}
-		EnData, err := p.EncryptionData([]byte(fmt.Sprintf("remote_address%s", p.SendRemoteAddr)))
+		EnData, err := encryption.EncryptionData([]byte(fmt.Sprintf("remote_address%s", p.SendRemoteAddr)),
+			p.UseSendConfusionData, p.SecretKey)
 		if err != nil {
 			return nil, err
 		}
-		p.Log.Debug("向服务端发送远程地址: %s", p.SendRemoteAddr)
+		p.Log.Debug("send remote address %s to server", p.SendRemoteAddr)
 		atomic.AddUint64(&totalSize, uint64(len(EnData)))
-		return conn, NewPackage(EnData).Pack(conn)
+		return conn, proxy.NewPackage(EnData).Pack(conn)
 	}
 
 	// 服务端读取远端数据
 	var conn net.Conn
 	var err error
-	err = new(Package).Read(p.lconn, func(pck Package) {
-		deData, err := p.DecryptData(pck.Data)
+	err = new(proxy.Package).Read(p.lconn, func(pck proxy.Package) {
+		deData, err := encryption.DecryptData(pck.Data, p.UseSendConfusionData, p.SecretKey)
 		if err != nil {
-			p.err("DecryptData error %s", err)
+			p.err("decryptData error %s", err)
 		}
 		if bytes.HasPrefix(deData, randomStart) {
-			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			p.Log.Debug("get random confusion data %s", humanize.Bytes(uint64(len(deData))))
 			return
 		}
 		if bytes.HasPrefix(deData, []byte("remote_address")) {
 			deData = bytes.Replace(deData, []byte("remote_address"), nil, 1)
-			p.Log.Debug("使用客户端指定的远程地址 %s", deData)
+			p.Log.Debug("use client send remote address %s", deData)
 			tcpAdder, err := net.ResolveTCPAddr("tcp", string(deData))
 			if err != nil {
-				p.err("连接客户端发送的远程地址失败", err)
+				p.err("connection client send remote address error ", err)
 				return
 			}
 			p.raddr = tcpAdder
 			conn, err = net.Dial("tcp", p.raddr.String())
 			if err != nil {
-				p.err("连接远程地址失败", err)
+				p.err("connection client send remote address  error ", err)
 				return
 			}
 			if v, ok := p.Log.(*pkg.ColorLogger); ok {
-				v.Prefix = fmt.Sprintf("connection %s(客户端指定) >>", p.raddr.String())
+				v.Prefix = fmt.Sprintf("connection %s(client send) >>", p.raddr.String())
 			}
 			p.Log.Info("Opened %s >>> %s", p.laddr.String(), tcpAdder.String())
 			return
@@ -322,13 +248,13 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 		// 直接使用服务端指定的远程地址
 		conn, err = net.Dial("tcp", p.raddr.String())
 		if err != nil {
-			p.err("连接远程地址失败", err)
+			p.err("connection remote address  error ", err)
 			return
 		}
 		p.Log.Info("Opened %s >>> %s", conn.LocalAddr().String(), conn.RemoteAddr().String())
 		_, err = conn.Write(deData)
 		if err != nil {
-			p.err("写入数据到远程地址失败", err)
+			p.err("write data to server error", err)
 		}
 		return
 	})
@@ -343,13 +269,12 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	var name string
 	switch {
 	case p.IsClient == islocal:
-		name = "读取明文, 发送加密数据"
+		name = "read plaintext data send encryption data"
 		f = p.ReadByPlaintextSendEncryption
 	default:
-		name = "读取加密数据, 发送明文"
+		name = "read encryption data send plaintext data"
 		f = p.ReadEncryptionSendPlaintext
 	}
-	p.Log.Debug("开始 %s", name)
 	name = fmt.Sprintf("%s error ", name) + "%s"
 	for {
 		err := f(src, dst)

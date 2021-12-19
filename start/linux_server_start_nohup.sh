@@ -1,1 +1,0 @@
-nohup ./miner-proxy -l :12345 -r xxxxx:123456 -sc -secret_key 123456789 -debug >> miner.log 2>& 1 &

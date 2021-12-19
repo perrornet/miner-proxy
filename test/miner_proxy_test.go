@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"miner-proxy/pkg"
-	"miner-proxy/proxy"
+	"miner-proxy/proxy/tcp"
 	"net"
 	"testing"
 )
@@ -32,7 +32,7 @@ func runMinerProxy(secretKey, remoteAddr string, isClient bool, port *int) error
 				logger.Warn("Failed to accept connection '%s'", err)
 				continue
 			}
-			p := proxy.New(conn, laddr, raddr)
+			p := tcp.New(conn, laddr, raddr)
 			p.SecretKey = secretKey
 			p.IsClient = isClient
 			p.Log = pkg.ColorLogger{}
