@@ -41,7 +41,8 @@
 #### 创建服务启动(推荐)
 1. 安装服务: `完整目录/miner-proxy_linux_amd64 -l :5555 -r 矿池域名:矿池端口 -secret_key xxxx -sc -install`
 2. 启动服务: `完整目录/miner-proxy_linux_amd64 -start`
-2. 查看服务状态: `完整目录/miner-proxy_linux_amd64 -stat`
+3. 查看服务状态: `完整目录/miner-proxy_linux_amd64 -stat`
+4. 查看日志:  `journalctl -f -u miner-proxy` 
 #### 通过supervisor启动
 1. 安装supervisor, 请自行搜索supervisor在您系统中的安装方式
 2. 写入配置文件, 输入命令: `vim /etc/supervisor/conf.d/miner-proxy.init`
