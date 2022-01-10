@@ -299,7 +299,6 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 	var conn net.Conn
 	var err error
 	err = new(Package).Read(p.lconn, func(pck Package) {
-		fmt.Println("read by conn: ", len(pck.Data), string(pck.Data))
 		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
 			p.err("DecryptData error %s", err)
