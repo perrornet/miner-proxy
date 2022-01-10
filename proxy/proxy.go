@@ -3,8 +3,6 @@ package proxy
 import (
 	"bytes"
 	"fmt"
-	"github.com/dustin/go-humanize"
-	"github.com/jmcvetta/randutil"
 	"io"
 	"log"
 	"miner-proxy/pkg"
@@ -12,6 +10,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/dustin/go-humanize"
+	"github.com/jmcvetta/randutil"
 )
 
 // Proxy - Manages a Proxy connection, piping data between local and remote.
@@ -141,6 +142,9 @@ func init() {
 
 // separateConfusionData 分离混淆的数据
 func (p *Proxy) separateConfusionData(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
 	if !p.UseSendConfusionData {
 		return data
 	}
@@ -194,8 +198,10 @@ func (p *Proxy) EncryptionData(data []byte) ([]byte, error) {
 
 // DecryptData 解密数据
 func (p *Proxy) DecryptData(data []byte) ([]byte, error) {
+	if len(data) < len(data)-len(proxyEnd) || len(data)-len(proxyEnd) <= 0 {
+		return nil, nil
+	}
 	data = data[len(proxyStart) : len(data)-len(proxyEnd)]
-
 	data, err := pkg.AesDecrypt(data, []byte(p.SecretKey))
 	if err != nil {
 		return nil, err
@@ -231,6 +237,9 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
 			p.err("DecryptData error %s", err)
+		}
+		if len(deData) == 0 {
+			return
 		}
 		if bytes.HasPrefix(deData, randomStart) {
 			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
@@ -290,9 +299,13 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 	var conn net.Conn
 	var err error
 	err = new(Package).Read(p.lconn, func(pck Package) {
+		fmt.Println("read by conn: ", len(pck.Data), string(pck.Data))
 		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
 			p.err("DecryptData error %s", err)
+		}
+		if len(deData) == 0 {
+			return
 		}
 		if bytes.HasPrefix(deData, randomStart) {
 			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))

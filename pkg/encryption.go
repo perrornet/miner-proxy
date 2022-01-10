@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"log"
 )
 
 // code from  https://www.jianshu.com/p/b5959b2defdb
@@ -42,11 +43,11 @@ func AesEncrypt(origData, key []byte) ([]byte, error) {
 
 // AES解密
 func AesDecrypt(crypted, key []byte) (result []byte, err error) {
-	//defer func() {
-	//	if err := recover(); err != nil{
-	//		log.Printf("[ERROR]: AesDecrypt error: %s ; data size: %d", err, len(crypted))
-	//	}
-	//}()
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("[ERROR]: AesDecrypt error: %s ; data size: %d, check key is ok\n", err, len(crypted))
+		}
+	}()
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
