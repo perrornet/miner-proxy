@@ -38,7 +38,7 @@ https://user-images.githubusercontent.com/23651751/148649355-03d04371-efb9-4c80-
 ```
 完整目录/miner-proxy_windows_amd64.exe -start
 ```
-#### 不启动服务, 有界面运行, 并且开机启动(可以启动只需要创建不同的bat文件名称即可)
+#### 不启动服务, 有界面运行, 并且开机启动(可以多开,只需要创建不同的bat文件名称即可)
 1. 新建 start-miner-proxy.bat 文件写入一下内容
 ```
 完整目录/miner-proxy_windows_amd64.exe -l :5555 -r 服务端ip:服务端端口 -secret_key xxxx -sc -client
