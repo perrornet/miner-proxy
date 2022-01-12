@@ -201,3 +201,57 @@ nbminer.exe -a ergo -o stratum+tcp://127.0.0.1:34568 -u perror.test -mt 3
 2. ![](./images/hiveos-add-02.png)
 3. ![](./images/hiveos-add-pool.png)
 4. 点击"应用"后再点击更新即可
+
+
+## 添加Docker启动方式
+为方便快速部署，可移植性，采用Docker容器化方式部署
+
+### 构建镜像
+```
+docker build -t miner-proxy:latest .
+```
+
+### 启动服务端容器
+```
+docker run \
+      -p 9999:9999 \
+      --restart=always \
+      --name miner-proxy \
+      -d miner-proxy:latest \
+      miner-proxy -l :9999 -r 矿池地址:矿池端口号 -secret_key 12345 -sc
+```
+
+### 启动客户端容器
+```
+docker run \
+      -p 9999:9999 \
+      --restart=always \
+      --name miner-proxy \
+      -d miner-proxy:latest \
+      miner-proxy -l :9999 -r 服务端ip:服务端端口 -secret_key 12345 -sc -client
+```
+
+### 启动客户端容器
+```
+docker run \
+      -p 9999:9999 \
+      --restart=always \
+      --name miner-proxy \
+      -d miner-proxy:latest \
+      miner-proxy -l :9999 -r 服务端ip:服务端端口 -secret_key 12345 -sc -client
+```
+
+### 查看容器日志
+```
+docker logs -f -t --tail=100 miner-proxy  # -f 实时查看 -t带时间戳的 --tail=100最新100行日志
+```
+
+### 查看容器状态
+```
+docker stats miner-proxy
+```
+
+### 查看容器内进程状态
+```
+docker top miner-proxy
+```
