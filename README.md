@@ -34,11 +34,11 @@ https://user-images.githubusercontent.com/23651751/148649355-03d04371-efb9-4c80-
 # 在cmd中输入以下命令
 完整目录/miner-proxy_windows_amd64.exe -l :5555 -r 服务端ip:服务端端口 -secret_key xxxx -sc -install -client
 ```
-3.  启动服务
+3.  启动服务(**一台电脑只能安装一个服务**)
 ```
 完整目录/miner-proxy_windows_amd64.exe -start
 ```
-#### 不启动服务, 有界面运行, 并且开机启动
+#### 不启动服务, 有界面运行, 并且开机启动(可以启动只需要创建不同的bat文件名称即可)
 1. 新建 start-miner-proxy.bat 文件写入一下内容
 ```
 完整目录/miner-proxy_windows_amd64.exe -l :5555 -r 服务端ip:服务端端口 -secret_key xxxx -sc -client
@@ -46,12 +46,12 @@ https://user-images.githubusercontent.com/23651751/148649355-03d04371-efb9-4c80-
 2. 按住 win + R 输入 shell:startup 回车将会打开一个目录, 将bat文件放在该目录下, 点击bat文件运行
 
 ### linux 端使用
-#### 创建服务启动(推荐)
+#### 创建服务启动(推荐**一台电脑只能安装一个服务**)
 1. 安装服务: `完整目录/miner-proxy_linux_amd64 -l :5555 -r 矿池域名:矿池端口 -secret_key xxxx -sc -install`
 2. 启动服务: `完整目录/miner-proxy_linux_amd64 -start`
 3. 查看服务状态: `完整目录/miner-proxy_linux_amd64 -stat`
 4. 查看日志:  `journalctl -f -u miner-proxy` 
-#### 通过supervisor启动
+#### 通过supervisor启动(**可以多开, 需要修改miner-proxy.init为miner-proxy1.init, miner-proxy2.init, 以及[program:miner-proxy1], [program:miner-proxy2]**)
 1. 安装supervisor, 请自行搜索supervisor在您系统中的安装方式
 2. 写入配置文件, 输入命令: `vim /etc/supervisor/conf.d/miner-proxy.init`
 3. 按i键进行编辑, 复制一下内容到文件中, 并将"完整目录"替换为 miner-proxy_linux_amd64 所在的目录
