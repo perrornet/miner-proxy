@@ -142,6 +142,10 @@ func (p *Package) Read(reader io.Reader, f func(Package)) error {
 			data = make([]byte, 10)
 			continue
 		}
+		if data[0] != uint8(PackageStart) {
+			data = make([]byte, 1)
+			continue
+		}
 		if len(data[:n]) == 10 && bytes.Contains(data[:n], []byte("-")) {
 			dataLength, err := strconv.Atoi(strings.ReplaceAll(string(data[:n]), "-", ""))
 			if err != nil {

@@ -3,17 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/kardianos/service"
 	"log"
 	"miner-proxy/pkg"
 	"miner-proxy/proxy"
 	"net"
 	"os"
 	"strings"
+
+	"github.com/kardianos/service"
 )
 
 var (
-	version              = "0.0.0-src"
 	localAddr            = flag.String("l", ":9999", "本地监听地址")
 	remoteAddr           = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
 	SendRemoteAddr       = flag.String("sr", "", "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接")
@@ -40,7 +40,7 @@ func (p *proxyService) run() {
 
 	logger := pkg.ColorLogger{}
 
-	logger.Info("miner-proxy (%s) proxing from %v to %v ", version, *localAddr, *remoteAddr)
+	logger.Info("miner-proxy  proxing from %v to %v ", *localAddr, *remoteAddr)
 
 	laddr, err := net.ResolveTCPAddr("tcp", *localAddr)
 	if err != nil {

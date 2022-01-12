@@ -51,7 +51,7 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 		laddr:  laddr,
 		raddr:  raddr,
 		erred:  false,
-		errsig: make(chan bool),
+		errsig: make(chan bool, 1),
 		Log:    pkg.NullLogger{},
 	}
 }
@@ -87,6 +87,10 @@ func (p *Proxy) Start() {
 	conn, err := p.connRemote()
 	if err != nil {
 		p.err("Remote connection failed: %s", err)
+		return
+	}
+	if conn == nil {
+		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放: %v", p.raddr.String()), nil)
 		return
 	}
 	p.rconn = conn
