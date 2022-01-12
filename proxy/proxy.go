@@ -90,7 +90,7 @@ func (p *Proxy) Start() {
 		return
 	}
 	if conn == nil {
-		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放: %v", p.raddr.String()), nil)
+		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放", p.raddr.String()), nil)
 		return
 	}
 	p.rconn = conn
