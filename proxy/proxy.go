@@ -253,7 +253,8 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 		atomic.AddUint64(&totalSize, uint64(len(pck.Data)))
 		_, err = writer.Write(deData)
 		if err != nil {
-			fmt.Println(err)
+			p.err("写入数据到远端失败: %v", err)
+			return
 		}
 	})
 	if readErr != nil {

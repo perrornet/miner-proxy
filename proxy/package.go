@@ -137,13 +137,9 @@ func (p *Package) Read(reader io.Reader, f func(Package)) error {
 		if err != nil {
 			return err
 		}
-		if data[0] == uint8(PackageStart) {
+		if data[0] == uint8(PackageStart) && len(data) == 1 {
 			// 再读取 11个字节
 			data = make([]byte, 10)
-			continue
-		}
-		if data[0] != uint8(PackageStart) {
-			data = make([]byte, 1)
 			continue
 		}
 		if len(data[:n]) == 10 && bytes.Contains(data[:n], []byte("-")) {
