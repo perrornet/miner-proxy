@@ -4,44 +4,27 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"miner-proxy/pkg"
+	"miner-proxy/pkg/status"
 	"net"
-	"sync"
-	"sync/atomic"
+	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/jmcvetta/randutil"
 )
 
 // Proxy - Manages a Proxy connection, piping data between local and remote.
 type Proxy struct {
-	sentBytes     uint64
-	receivedBytes uint64
-	laddr, raddr  *net.TCPAddr
-	lconn, rconn  io.ReadWriteCloser
-	erred         bool
-	errsig        chan bool
-	tlsAddress    string
-
-	Matcher  func([]byte)
-	Replacer func([]byte) []byte
-
-	// Settings
-	Nagles               bool
-	Log                  pkg.Logger
+	laddr, raddr         *net.TCPAddr
+	lconn, rconn         io.ReadWriteCloser
+	erred                bool
+	errsig               chan bool
 	OutputHex            bool
 	SecretKey            string
 	IsClient             bool
 	SendRemoteAddr       string
 	UseSendConfusionData bool
 }
-
-var (
-	totalSize   uint64
-	onlineCount int64
-)
 
 // New - Create a new Proxy instance. Takes over local connection passed in,
 // and closes it when finished.
@@ -52,28 +35,7 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 		raddr:  raddr,
 		erred:  false,
 		errsig: make(chan bool, 1),
-		Log:    pkg.NullLogger{},
 	}
-}
-
-var (
-	once      sync.Once
-	startTime = time.Now()
-)
-
-func init() {
-	go once.Do(func() {
-		t := time.Now()
-		for range time.Tick(time.Second * 30) {
-			total := atomic.LoadUint64(&totalSize)
-			log.Printf("从 %s 至现在总计加密转发 %s 数据; 平均转发速度 %s/秒; 当前在线 %d 个客户端 \n",
-				t.Format("2006-01-02 15:04:05"),
-				humanize.Bytes(total),
-				humanize.Bytes(uint64(float64(total)/time.Since(startTime).Seconds())),
-				atomic.LoadInt64(&onlineCount),
-			)
-		}
-	})
 }
 
 // Start - open connection to remote and start proxying data.
@@ -81,18 +43,20 @@ func (p *Proxy) Start() {
 	defer pkg.Recover(true)
 	defer p.lconn.Close()
 	defer func() {
-		atomic.AddInt64(&onlineCount, -1)
+		if !p.IsClient && p.rconn != nil {
+			status.Del(p.lconn.(net.Conn).RemoteAddr().String())
+		}
 	}()
-	atomic.AddInt64(&onlineCount, 1)
+
 	conn, err := p.connRemote()
-	if err != nil {
-		p.err("Remote connection failed: %s", err)
-		return
-	}
-	if conn == nil {
+	if err != nil || conn == nil {
 		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放", p.raddr.String()), nil)
 		return
 	}
+	if !p.IsClient {
+		status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, conn.RemoteAddr().String())
+	}
+
 	p.rconn = conn
 	defer p.rconn.Close()
 
@@ -106,16 +70,20 @@ func (p *Proxy) Start() {
 
 	//wait for close...
 	<-p.errsig
-	p.Log.Info("Closed (%d bytes sent, %d bytes recieved)", p.sentBytes, p.receivedBytes)
 }
 
 func (p *Proxy) err(s string, err error) {
 	if p.erred {
 		return
 	}
-	if err != io.EOF {
-		p.Log.Warn(s, err)
+	switch err {
+	case nil:
+		pkg.Warn(s)
+	case io.EOF:
+	default:
+		pkg.Warn(s, err)
 	}
+
 	p.errsig <- true
 	p.erred = true
 }
@@ -133,8 +101,8 @@ var (
 )
 
 func init() {
-	for i := 0; i < 1000; i++ {
-		dataLength, _ := randutil.IntRange(10, 102)
+	for i := 0; i < 100; i++ {
+		dataLength, _ := randutil.IntRange(1024, 2048)
 		var temp = make([]byte, dataLength)
 		for l := 0; l < dataLength; l++ {
 			char, _ := randutil.IntRange(0, 255)
@@ -229,8 +197,12 @@ func (p *Proxy) ReadByPlaintextSendEncryption(reader io.Reader, writer io.Writer
 	if err != nil {
 		return err
 	}
-	p.Log.Debug("读取到 %d 明文数据, 加密后数据大小 %d; 加密耗时 %s", n, len(EnData), time.Since(t))
-	atomic.AddUint64(&totalSize, uint64(len(EnData)))
+
+	pkg.Debug("读取到 %d 明文数据, 加密后数据大小 %d; 加密耗时 %s", n, len(EnData), time.Since(t))
+	if c, ok := writer.(net.Conn); ok && !p.IsClient {
+		status.Add(c.RemoteAddr().String(), int64(len(data)), reader.(net.Conn).RemoteAddr().String())
+	}
+
 	return NewPackage(EnData).Pack(writer)
 }
 
@@ -240,17 +212,20 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 	readErr := new(Package).Read(reader, func(pck Package) {
 		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
-			p.err("DecryptData error %s", err)
+			p.err("检查客户端密钥是否与服务端密钥一致!", nil)
+			return
 		}
 		if len(deData) == 0 {
 			return
 		}
 		if bytes.HasPrefix(deData, randomStart) {
-			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			pkg.Debug("读取到 %d 随机混淆数据", len(deData))
 			return
 		}
-		p.Log.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
-		atomic.AddUint64(&totalSize, uint64(len(pck.Data)))
+		pkg.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
+		if c, ok := writer.(net.Conn); ok && !p.IsClient {
+			status.Add(reader.(net.Conn).RemoteAddr().String(), int64(len(pck.Data)), c.RemoteAddr().String())
+		}
 		_, err = writer.Write(deData)
 		if err != nil {
 			p.err("写入数据到远端失败: %v", err)
@@ -265,7 +240,7 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 
 func (p *Proxy) SendRandomData(dst io.Writer) {
 	sleepTime, _ := randutil.IntRange(3, 15)
-	for {
+	for !p.erred {
 		time.Sleep(time.Second * time.Duration(sleepTime))
 
 		// 写入随机数据
@@ -274,8 +249,9 @@ func (p *Proxy) SendRandomData(dst io.Writer) {
 		if err != nil {
 			return
 		}
-		p.Log.Debug("向客户端写入随机混淆数据 %d", len(data))
+		pkg.Debug("向客户端写入随机混淆数据 %d", len(data))
 		if err := NewPackage(data).Pack(dst); err != nil {
+			p.err("客户端关闭了连接, 请检查客户端设置, 或者客户端至本服务器的网络情况", nil)
 			return
 		}
 	}
@@ -287,7 +263,6 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.Log.Info("Opened %s >>> %s", conn.LocalAddr().String(), conn.RemoteAddr())
 		if p.SendRemoteAddr == "" {
 			return conn, nil
 		}
@@ -295,8 +270,7 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.Log.Debug("向服务端发送远程地址: %s", p.SendRemoteAddr)
-		atomic.AddUint64(&totalSize, uint64(len(EnData)))
+		pkg.Debug("向服务端发送远程地址: %s", p.SendRemoteAddr)
 		return conn, NewPackage(EnData).Pack(conn)
 	}
 
@@ -306,43 +280,43 @@ func (p *Proxy) connRemote() (net.Conn, error) {
 	err = new(Package).Read(p.lconn, func(pck Package) {
 		deData, err := p.DecryptData(pck.Data)
 		if err != nil {
-			p.err("DecryptData error %s", err)
+			p.err("检查客户端密钥是否与服务端密钥一致!", nil)
+			return
 		}
 		if len(deData) == 0 {
 			return
 		}
 		if bytes.HasPrefix(deData, randomStart) {
-			p.Log.Debug("读取到 %d 随机混淆数据", len(deData))
+			pkg.Debug("读取到 %d 随机混淆数据", len(deData))
 			return
 		}
 		if bytes.HasPrefix(deData, []byte("remote_address")) {
 			deData = bytes.Replace(deData, []byte("remote_address"), nil, 1)
-			p.Log.Debug("使用客户端指定的远程地址 %s", deData)
+			pkg.Debug("使用客户端指定的远程地址 %s", deData)
 			tcpAdder, err := net.ResolveTCPAddr("tcp", string(deData))
+
 			if err != nil {
 				p.err("连接客户端发送的远程地址失败", err)
 				return
 			}
+
 			p.raddr = tcpAdder
-			conn, err = net.Dial("tcp", p.raddr.String())
+			conn, err = net.DialTimeout("tcp", p.raddr.String(), time.Second*10)
 			if err != nil {
-				p.err("连接远程地址失败", err)
+				p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
 				return
 			}
-			if v, ok := p.Log.(*pkg.ColorLogger); ok {
-				v.Prefix = fmt.Sprintf("connection %s(客户端指定) >>", p.raddr.String())
-			}
-			p.Log.Info("Opened %s >>> %s", p.laddr.String(), tcpAdder.String())
+
 			return
 		}
 
 		// 直接使用服务端指定的远程地址
 		conn, err = net.Dial("tcp", p.raddr.String())
 		if err != nil {
-			p.err("连接远程地址失败", err)
+			p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
 			return
 		}
-		p.Log.Info("Opened %s >>> %s", conn.LocalAddr().String(), conn.RemoteAddr().String())
+
 		_, err = conn.Write(deData)
 		if err != nil {
 			p.err("写入数据到远程地址失败", err)
@@ -366,12 +340,29 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 		name = "读取加密数据, 发送明文"
 		f = p.ReadEncryptionSendPlaintext
 	}
-	p.Log.Debug("开始 %s", name)
+	pkg.Debug("开始 %s", name)
 	name = fmt.Sprintf("%s error ", name) + "%s"
-	for {
+	for !p.erred {
 		err := f(src, dst)
+		if p.erred {
+			return
+		}
 		if err != nil {
-			p.err(name, err)
+			switch {
+			case strings.Contains(name, "读取加密数据, 发送明文"):
+				if p.IsClient {
+					p.err("检查服务服是否正确启动, 服务器防火墙是否开启, 本地网络到服务器网络是否畅通, 矿机端是否设置正确", nil)
+					return
+				}
+				p.err("客户端关闭了连接, 请检查矿机/客户端设置", nil)
+				return
+			default:
+				if p.IsClient {
+					p.err("矿机关闭了连接, 请检查矿机设置正常", nil)
+					return
+				}
+				p.err("矿池关闭了连接, 请检查矿池/矿机/客户端设置", nil)
+			}
 			return
 		}
 	}

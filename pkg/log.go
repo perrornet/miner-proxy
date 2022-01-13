@@ -1,71 +1,131 @@
 package pkg
 
 import (
-	"fmt"
-	"github.com/mgutz/ansi"
-	"time"
+	"os"
+	"strings"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Logger - Interface to pass into Proxy for it to log messages
-type Logger interface {
-	Trace(f string, args ...interface{})
-	Debug(f string, args ...interface{})
-	Info(f string, args ...interface{})
-	Warn(f string, args ...interface{})
+var (
+	_log    *zap.Logger
+	logFunc map[zapcore.Level]func(template string, args ...interface{})
+)
+
+type GormLog struct {
+	l *zap.SugaredLogger
 }
 
-// NullLogger - An empty logger that ignores everything
-type NullLogger struct{}
-
-// Trace - no-op
-func (l NullLogger) Trace(f string, args ...interface{}) {}
-
-// Debug - no-op
-func (l NullLogger) Debug(f string, args ...interface{}) {}
-
-// Info - no-op
-func (l NullLogger) Info(f string, args ...interface{}) {}
-
-// Warn - no-op
-func (l NullLogger) Warn(f string, args ...interface{}) {}
-
-// ColorLogger - A Logger that logs to stdout in color
-type ColorLogger struct {
-	VeryVerbose bool
-	Verbose     bool
-	Prefix      string
-	Color       bool
-}
-
-// Trace - Log a very verbose trace message
-func (l ColorLogger) Trace(f string, args ...interface{}) {
-	if !l.VeryVerbose {
-		return
+func initOutFunc() {
+	if len(logFunc) == 0 {
+		logFunc = map[zapcore.Level]func(template string, args ...interface{}){
+			zapcore.DebugLevel:  _log.Sugar().Debugf,
+			zapcore.InfoLevel:   _log.Sugar().Infof,
+			zapcore.WarnLevel:   _log.Sugar().Warnf,
+			zapcore.ErrorLevel:  _log.Sugar().Errorf,
+			zapcore.FatalLevel:  _log.Sugar().Fatalf,
+			zapcore.PanicLevel:  _log.Sugar().Panicf,
+			zapcore.DPanicLevel: _log.Sugar().DPanicf,
+		}
 	}
-	l.output("blue", f, args...)
 }
 
-// Debug - Log a debug message
-func (l ColorLogger) Debug(f string, args ...interface{}) {
-	if !l.Verbose {
-		return
+func InitLog(level zapcore.Level, logfile string) {
+	encoderConfig := &zapcore.EncoderConfig{
+		TimeKey:        "time",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		MessageKey:     "message",
+		StacktraceKey:  "trace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalLevelEncoder,
+		EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
+		EncodeDuration: zapcore.MillisDurationEncoder,
 	}
-	l.output("green", f, args...)
-}
 
-// Info - Log a general message
-func (l ColorLogger) Info(f string, args ...interface{}) {
-	l.output("green", f, args...)
-}
+	atomicLevel := zap.NewAtomicLevelAt(level)
+	var ws []zapcore.WriteSyncer
 
-// Warn - Log a warning
-func (l ColorLogger) Warn(f string, args ...interface{}) {
-	l.output("red", f, args...)
-}
-
-func (l ColorLogger) output(color, f string, args ...interface{}) {
-	if l.Color && color != "" {
-		f = ansi.Color(f, color)
+	ws = append(ws, zapcore.AddSync(os.Stdout))
+	if logfile != "" {
+		hook := &lumberjack.Logger{
+			Filename:   logfile, // 日志文件路径
+			MaxSize:    100,
+			MaxBackups: 5,
+			MaxAge:     7,
+			Compress:   false,
+		}
+		ws = append(ws, zapcore.AddSync(hook))
 	}
-	fmt.Printf(fmt.Sprintf("%s %s%s\n", time.Now().Format("2006-01-02 15:04:05"), l.Prefix, f), args...)
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(*encoderConfig),
+		zapcore.NewMultiWriteSyncer(ws...), atomicLevel)
+
+	var options = []zap.Option{zap.AddCallerSkip(2)}
+	if level <= zap.DebugLevel {
+		options = append(options, zap.AddCaller())
+	}
+	_log = zap.New(core, options...)
+	initOutFunc()
+}
+
+func StrLevel2zAPlEVEL(level string) zapcore.Level {
+	switch strings.ToLower(level) {
+	case "info":
+		return zapcore.InfoLevel
+	case "Warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.DebugLevel
+	}
+}
+
+func outByLog(level zapcore.Level, msg string, v ...interface{}) {
+	if _log == nil {
+		InitLog(zap.DebugLevel, "")
+		initOutFunc()
+		_log.Warn("log not init, auto init log level debug")
+	}
+
+	var out = _log.Sugar().Debugf
+	if _, ok := logFunc[level]; ok {
+		out = logFunc[level]
+	}
+
+	out(msg, v...)
+}
+
+func Debug(msg string, v ...interface{}) {
+	outByLog(zapcore.DebugLevel, msg, v...)
+}
+
+func Info(msg string, v ...interface{}) {
+	outByLog(zapcore.InfoLevel, msg, v...)
+}
+
+func Warn(msg string, v ...interface{}) {
+	outByLog(zapcore.WarnLevel, msg, v...)
+}
+
+func Error(msg string, v ...interface{}) {
+	outByLog(zapcore.ErrorLevel, msg, v...)
+}
+
+func Panic(msg string, v ...interface{}) {
+	outByLog(zapcore.PanicLevel, msg, v...)
+}
+
+func DPanic(msg string, v ...interface{}) {
+	outByLog(zapcore.DPanicLevel, msg, v...)
+}
+
+func Fatal(msg string, v ...interface{}) {
+	outByLog(zapcore.FatalLevel, msg, v...)
+}
+
+func Log() *zap.Logger {
+	return _log
 }

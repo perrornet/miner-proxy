@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 	"log"
 )
 
@@ -22,13 +23,12 @@ func PKCS7UnPadding(origData []byte) []byte {
 }
 
 // AES加密,CBC
-func AesEncrypt(origData, key []byte) ([]byte, error) {
-	//defer func() {
-	//	if err := recover(); err != nil{
-	//		log.Println("[ERROR]: AesEncrypt error: ", err)
-	//	}
-	//}()
-	//log.Printf("AesEncrypt data size: %d", len(origData))
+func AesEncrypt(origData, key []byte) (crypted []byte, err error) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("[ERROR]: AesEncrypt error: ", err)
+		}
+	}()
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -36,16 +36,16 @@ func AesEncrypt(origData, key []byte) ([]byte, error) {
 	blockSize := block.BlockSize()
 	origData = PKCS7Padding(origData, blockSize)
 	blockMode := cipher.NewCBCEncrypter(block, key[:blockSize])
-	crypted := make([]byte, len(origData))
+	crypted = make([]byte, len(origData))
 	blockMode.CryptBlocks(crypted, origData)
-	return crypted, nil
+	return
 }
 
 // AES解密
 func AesDecrypt(crypted, key []byte) (result []byte, err error) {
 	defer func() {
-		if err := recover(); err != nil {
-			log.Printf("[ERROR]: AesDecrypt error: %s ; data size: %d, check key is ok\n", err, len(crypted))
+		if recoverErr := recover(); recoverErr != nil {
+			err = fmt.Errorf("密钥错误")
 		}
 	}()
 
@@ -59,5 +59,5 @@ func AesDecrypt(crypted, key []byte) (result []byte, err error) {
 	blockMode.CryptBlocks(origData, crypted)
 	origData = PKCS7UnPadding(origData)
 	//log.Printf("AesDecrypt data size: %d", len(origData))
-	return origData, nil
+	return
 }
