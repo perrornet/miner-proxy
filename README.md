@@ -235,6 +235,15 @@ docker run \
       -d miner-proxy:latest \
       miner-proxy -l :9999 -r 服务端ip:服务端端口 -secret_key 12345 -sc -client
 ```
+### docker-compose 启动方式
+ 
+```
+ # 第一次运行时会自动构建镜像 参数调整请进入docker-compose.yml 进行修改
+ # 代码更新后需要 强制更新一次镜像 使用 docker-compose up -d --build server 或者 client
+ # -d 后台运行
+docker-compose up -d server 
+docker-compose up -d client   
+```
 
 ### 查看容器日志
 ```
