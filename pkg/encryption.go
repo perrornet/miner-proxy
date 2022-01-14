@@ -42,7 +42,7 @@ func AesEncrypt(origData, key []byte) (crypted []byte, err error) {
 }
 
 // AES解密
-func AesDecrypt(crypted, key []byte) (result []byte, err error) {
+func AesDecrypt(crypted, key []byte) (origData []byte, err error) {
 	defer func() {
 		if recoverErr := recover(); recoverErr != nil {
 			err = fmt.Errorf("密钥错误")
@@ -55,9 +55,8 @@ func AesDecrypt(crypted, key []byte) (result []byte, err error) {
 	}
 	blockSize := block.BlockSize()
 	blockMode := cipher.NewCBCDecrypter(block, key[:blockSize])
-	origData := make([]byte, len(crypted))
+	origData = make([]byte, len(crypted))
 	blockMode.CryptBlocks(origData, crypted)
 	origData = PKCS7UnPadding(origData)
-	//log.Printf("AesDecrypt data size: %d", len(origData))
 	return
 }
