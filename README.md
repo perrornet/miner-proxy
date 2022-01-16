@@ -41,6 +41,7 @@ https://user-images.githubusercontent.com/23651751/148649355-03d04371-efb9-4c80-
 -rsh |- | 指定该参数后, 客户端将会10-60秒发送一次http请求到定义好的随机网站中
 -wx |-wx T_XXXX | 掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken
 -add_wx_user |- | 绑定微信账号到微信通知中, 详细文档查看[v0.3.4](https://github.com/PerrorOne/miner-proxy/releases/tag/v0.3.4)
+-offline|-offline 360 |掉线多少秒之后就发送微信通知,默认4分钟
 -install | - |   添加到系统服务, 并且开机自动启动
 -remove | - |   移除系统服务, 并且关闭开机自动启动
 -restart| - |    重启代理服务
