@@ -1,0 +1,59 @@
+on:
+  push: # 每次 push 的时候触发
+
+name: Build Release
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "1.17"
+      - run: cd ./cmd/miner-proxy/
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_darwin_amd64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_freebsd_386 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_freebsd_amd64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_freebsd_arm .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_386 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_amd64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_arm .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_mips .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_mips64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_mips64le .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_mipsle .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_linux_s390x .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_netbsd_386 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_netbsd_amd64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_netbsd_arm .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_openbsd_386 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_openbsd_amd64 .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_windows_386.exe .
+      - run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o miner-proxy_windows_amd64.exe .
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            miner-proxy_darwin_amd64
+            miner-proxy_freebsd_386
+            miner-proxy_freebsd_amd64
+            miner-proxy_freebsd_arm
+            miner-proxy_linux_386
+            miner-proxy_linux_amd64
+            miner-proxy_linux_arm
+            miner-proxy_linux_mips
+            miner-proxy_linux_mips64
+            miner-proxy_linux_mips64le
+            miner-proxy_linux_mipsle
+            miner-proxy_linux_s390x
+            miner-proxy_netbsd_386
+            miner-proxy_netbsd_amd64
+            miner-proxy_netbsd_arm
+            miner-proxy_openbsd_386
+            miner-proxy_openbsd_amd64
+            miner-proxy_windows_386.exe
+            miner-proxy_windows_amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

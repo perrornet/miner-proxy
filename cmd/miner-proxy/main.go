@@ -7,6 +7,7 @@ import (
 	"miner-proxy/pkg"
 	"miner-proxy/pkg/status"
 	"miner-proxy/proxy"
+	"miner-proxy/proxy/wxPusher"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/jmcvetta/randutil"
 	"github.com/kardianos/service"
+	"github.com/liushuochen/gotable"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -34,6 +36,8 @@ var (
 	stat                 = flag.Bool("stat", false, "查看代理服务状态")
 	logFile              = flag.String("log_file", "", "将日志输入到文件中, 示例: ./miner-proxy.log")
 	randomSendHttp       = flag.Bool("rsh", false, "是否随机时间发送随机http请求混淆, 支持客户端")
+	wxPusherToken        = flag.String("wx", "", "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken")
+	newWxPusherUser      = flag.Bool("add_wx_user", false, "绑定微信账号到微信通知中, 该参数只有在服务端生效")
 )
 
 var (
@@ -49,6 +53,47 @@ var (
 )
 
 type proxyService struct{}
+
+func (p *proxyService) checkWxPusher() error {
+	if len(*wxPusherToken) <= 10 {
+		pkg.Fatal("您输入的微信通知token无效, 请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 中获取")
+	}
+	w := wxPusher.NewPusher(*wxPusherToken)
+	if *newWxPusherUser {
+		qrUrl, err := w.ShowQrCode()
+		if err != nil {
+			pkg.Fatal("获取二维码url失败: %s", err.Error())
+		}
+		pkg.Info("请复制网址, 在浏览器打开, 并使用微信进行扫码登陆: %s", qrUrl)
+		pkg.Input("您是否扫描完成?(y/n):", func(s string) bool {
+			if strings.ToLower(s) == "y" {
+				return true
+			}
+			return false
+		})
+	}
+
+	users, err := w.GetAllUser()
+	if err != nil {
+		pkg.Fatal("获取所有的user失败: %s", err.Error())
+	}
+	table, _ := gotable.Create("uid", "微信昵称")
+	for _, v := range users {
+		table.AddRow(map[string]string{
+			"uid":  v.UId,
+			"微信昵称": v.NickName,
+		})
+	}
+	fmt.Println("您已经注册的微信通知用户, 如果您还需要增加用户, 请再次运行 ./miner-proxy -add_wx_user -wx tokne, 增加用户, 已经运行的程序将会在5分钟内更新订阅的用户:")
+	fmt.Println(table.String())
+	if !*isClient && (*install || *secretKey != "" || *localAddr != "") {
+		// 不是客户端并且不是只想要增加新的用户, 就直接将wxpusher obj 注册回调
+		if err := status.AddConnectErrorCallback(w); err != nil {
+			pkg.Fatal("注册失败通知callback失败: %s", err.Error())
+		}
+	}
+	return nil
+}
 
 func (p *proxyService) Start(_ service.Service) error {
 	go p.run()
@@ -166,7 +211,14 @@ func main() {
 	if !*debug {
 		pkg.InitLog(zapcore.WarnLevel, *logFile)
 	}
-
+	if *newWxPusherUser || *wxPusherToken != "" {
+		if err := new(proxyService).checkWxPusher(); err != nil {
+			pkg.Fatal(err.Error())
+		}
+	}
+	if *newWxPusherUser {
+		return
+	}
 	svcConfig := &service.Config{
 		Name:        "miner-proxy",
 		DisplayName: "miner-proxy",
