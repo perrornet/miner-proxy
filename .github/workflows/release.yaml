@@ -11,26 +11,29 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: "1.17"
-      - run: cd ./cmd/miner-proxy/
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ../../miner-proxy_darwin_amd64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -o ../../miner-proxy_freebsd_386 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -o ../../miner-proxy_freebsd_amd64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=freebsd GOARCH=arm go build -o ../../miner-proxy_freebsd_arm .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -o ../../miner-proxy_linux_386 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../miner-proxy_linux_amd64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -o ../../miner-proxy_linux_arm .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=mips go build -o ../../miner-proxy_linux_mips .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -o ../../miner-proxy_linux_mips64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -o ../../miner-proxy_linux_mips64le .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=mipsle go build -o ../../miner-proxy_linux_mipsle .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=linux GOARCH=s390x go build -o ../../miner-proxy_linux_s390x .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=netbsd GOARCH=386 go build -o ../../miner-proxy_netbsd_386 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=netbsd GOARCH=amd64 go build -o ../../miner-proxy_netbsd_amd64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=netbsd GOARCH=arm go build -o ../../miner-proxy_netbsd_arm .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=openbsd GOARCH=386 go build -o ../../miner-proxy_openbsd_386 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -o ../../miner-proxy_openbsd_amd64 .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=windows GOARCH=386.exe go build -o ../../miner-proxy_windows_386.exe .
-      - run: cd ./cmd/miner-proxy/ && CGO_ENABLED=0 GOOS=windows GOARCH=amd64.exe go build -o ../../miner-proxy_windows_amd64.exe .
+      - run: goVersion=$(go version) && \
+          gitHash=$(git show -s --format=%H) && \
+          buildTime=$(git show -s --format=%cd) && \
+          gitCommit=$(git show -s --format=%s) && \
+          cd ./cmd/miner-proxy/ && \
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ../../miner-proxy_darwin_amd64 . && \
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -o ../../miner-proxy_freebsd_386 . && \
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -o ../../miner-proxy_freebsd_amd64 . && \
+          CGO_ENABLED=0 GOOS=freebsd GOARCH=arm go build -o ../../miner-proxy_freebsd_arm . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -o ../../miner-proxy_linux_386 . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../../miner-proxy_linux_amd64 . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -o ../../miner-proxy_linux_arm . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips go build -o ../../miner-proxy_linux_mips . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -o ../../miner-proxy_linux_mips64 . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -o ../../miner-proxy_linux_mips64le . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle go build -o ../../miner-proxy_linux_mipsle . && \
+          CGO_ENABLED=0 GOOS=linux GOARCH=s390x go build -o ../../miner-proxy_linux_s390x . && \
+          CGO_ENABLED=0 GOOS=netbsd GOARCH=386 go build -o ../../miner-proxy_netbsd_386 . && \
+          CGO_ENABLED=0 GOOS=netbsd GOARCH=amd64 go build -o ../../miner-proxy_netbsd_amd64 . && \
+          CGO_ENABLED=0 GOOS=netbsd GOARCH=arm go build -o ../../miner-proxy_netbsd_arm . && \
+          CGO_ENABLED=0 GOOS=openbsd GOARCH=386 go build -o ../../miner-proxy_openbsd_386 . && \
+          CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -o ../../miner-proxy_openbsd_amd64 . && \
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64.exe go build -o ../../miner-proxy_windows_amd64.exe .
 
       - name: Release
         uses: softprops/action-gh-release@v1
