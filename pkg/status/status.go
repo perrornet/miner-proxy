@@ -50,7 +50,7 @@ func init() {
 	}()
 }
 
-func Show() {
+func Show(offlineTime time.Duration) {
 	table, _ := gotable.Create("Ip", "传输数据大小", "连接时长", "矿池")
 	var result []map[string]string
 	var total int64
@@ -62,7 +62,7 @@ func Show() {
 
 	status.Range(func(key, value interface{}) bool {
 		s := value.(*Status)
-		if !s.Status && time.Since(s.StopTime).Minutes() >= 1 { // 掉线1分钟后, 提醒
+		if !s.Status && time.Since(s.StopTime).Minutes() >= offlineTime.Minutes() { // 掉线1分钟后, 提醒
 
 			offlineIps = append(offlineIps, s.Ip)
 			return true

@@ -38,6 +38,7 @@ var (
 	randomSendHttp       = flag.Bool("rsh", false, "是否随机时间发送随机http请求混淆, 支持客户端")
 	wxPusherToken        = flag.String("wx", "", "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken")
 	newWxPusherUser      = flag.Bool("add_wx_user", false, "绑定微信账号到微信通知中, 该参数只有在服务端生效")
+	offlineTime          = flag.Int64("offline", 60*4, "掉线多少秒之后, 发送微信通知")
 )
 
 var (
@@ -158,7 +159,7 @@ func (p *proxyService) run() {
 	if !*isClient {
 		go func() {
 			for range time.Tick(time.Second * 30) {
-				status.Show()
+				status.Show(time.Duration(*offlineTime) * time.Second)
 			}
 		}()
 	}
