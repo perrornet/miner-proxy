@@ -42,6 +42,13 @@ var (
 )
 
 var (
+	// build 时加入
+	gitHash   string
+	gitCommit string
+	buildTime string
+	goVersion string
+)
+var (
 	reqeustUrls = []string{
 		"https://www.baidu.com/",
 		"https://m.baidu.com/",
@@ -205,6 +212,17 @@ A:
 
 func main() {
 	flag.Parse()
+	fmt.Println("版本信息: ")
+	fmt.Printf("git commit hash: %s\n", gitHash)
+	fmt.Printf("git commit message: %s\n", gitCommit)
+	if buildTime != "" {
+		t, err := time.Parse(time.ANSIC+" -0700", buildTime)
+		if err == nil {
+			fmt.Printf("build time: %s\n", t.Format("2006-01-02 15:04:05"))
+		}
+	}
+	fmt.Printf("golang version: %s\n", goVersion)
+
 	if *debug {
 		pkg.InitLog(zapcore.DebugLevel, *logFile)
 	}
