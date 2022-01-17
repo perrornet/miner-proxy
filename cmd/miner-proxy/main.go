@@ -43,10 +43,7 @@ var (
 
 var (
 	// build 时加入
-	gitHash   string
 	gitCommit string
-	buildTime string
-	goVersion string
 )
 var (
 	reqeustUrls = []string{
@@ -72,7 +69,7 @@ func (p *proxyService) checkWxPusher() error {
 		if err != nil {
 			pkg.Fatal("获取二维码url失败: %s", err.Error())
 		}
-		pkg.Info("请复制网址, 在浏览器打开, 并使用微信进行扫码登陆: %s", qrUrl)
+		fmt.Printf("请复制网址, 在浏览器打开, 并使用微信进行扫码登陆: %s\n", qrUrl)
 		pkg.Input("您是否扫描完成?(y/n):", func(s string) bool {
 			if strings.ToLower(s) == "y" {
 				return true
@@ -87,7 +84,7 @@ func (p *proxyService) checkWxPusher() error {
 	}
 	table, _ := gotable.Create("uid", "微信昵称")
 	for _, v := range users {
-		table.AddRow(map[string]string{
+		_ = table.AddRow(map[string]string{
 			"uid":  v.UId,
 			"微信昵称": v.NickName,
 		})
@@ -118,11 +115,12 @@ func (p *proxyService) randomRequestHttp() {
 		Timeout: time.Second * 10,
 	}
 	index, _ := randutil.IntRange(0, len(reqeustUrls))
+	pkg.Debug("http请求: ", reqeustUrls[index])
 	resp, _ := client.Get(reqeustUrls[index])
 	if resp == nil {
 		return
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func (p *proxyService) run() {
@@ -170,6 +168,9 @@ func (p *proxyService) run() {
 			}
 		}()
 	}
+	if *isClient {
+		go status.ShowDelay(time.Second * 30)
+	}
 
 	if *isClient && *randomSendHttp {
 		go p.randomRequestHttp()
@@ -212,23 +213,14 @@ A:
 
 func main() {
 	flag.Parse()
-	fmt.Println("版本信息: ")
-	fmt.Printf("git commit hash: %s\n", gitHash)
-	fmt.Printf("git commit message: %s\n", gitCommit)
-	if buildTime != "" {
-		t, err := time.Parse(time.ANSIC+" -0700", buildTime)
-		if err == nil {
-			fmt.Printf("build time: %s\n", t.Format("2006-01-02 15:04:05"))
-		}
-	}
-	fmt.Printf("golang version: %s\n", goVersion)
-
+	pkg.PrintHelp()
+	fmt.Printf("版本日志: %s\n", gitCommit)
 	if *debug {
 		pkg.InitLog(zapcore.DebugLevel, *logFile)
 	}
 
 	if !*debug {
-		pkg.InitLog(zapcore.WarnLevel, *logFile)
+		pkg.InitLog(zapcore.InfoLevel, *logFile)
 	}
 	if *newWxPusherUser || *wxPusherToken != "" {
 		if err := new(proxyService).checkWxPusher(); err != nil {
@@ -284,14 +276,14 @@ func main() {
 			log.Fatalln("停止代理服务失败", err)
 		}
 		log.Println("成功停止代理服务")
-		pkg.Input("是否需要移除代理服务?(y/n)", func(in string) bool {
-			if in == "y" {
-				if err := s.Uninstall(); err != nil {
-					log.Println("删除失败", err)
-				}
-			}
-			return true
-		})
+		//pkg.Input("是否需要移除代理服务?(y/n)", func(in string) bool {
+		//	if in == "y" {
+		//		if err := s.Uninstall(); err != nil {
+		//			log.Println("删除失败", err)
+		//		}
+		//	}
+		//	return true
+		//})
 		return
 	}
 

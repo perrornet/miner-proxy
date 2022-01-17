@@ -20,6 +20,8 @@ var (
 	startTime       = time.Now()
 	pushers         sync.Map
 	m               sync.Mutex
+	parseTime       int64
+	totalParseCount int64
 )
 
 type Status struct {
@@ -48,6 +50,32 @@ func init() {
 			time.Sleep(time.Second*5*60 + 30) // 每5分30秒执行一次
 		}
 	}()
+}
+
+func UpdateTimeParse(t int64) {
+	atomic.AddInt64(&parseTime, t)
+	atomic.AddInt64(&totalParseCount, 1)
+}
+
+func clearTimeParse() {
+	atomic.StoreInt64(&parseTime, 0)
+	atomic.StoreInt64(&totalParseCount, 0)
+}
+
+func ShowDelay(sleepTime time.Duration) {
+	defer func() {
+		time.AfterFunc(sleepTime, func() {
+			ShowDelay(sleepTime)
+		})
+	}()
+	p := atomic.LoadInt64(&parseTime)
+	t := atomic.LoadInt64(&totalParseCount)
+	if p == 0 || t == 0 {
+		return
+	}
+
+	pkg.Info("本地到服务器 %s 内延迟为 %s", sleepTime.String(), time.Duration(float64(p)/float64(t)).String())
+	clearTimeParse()
 }
 
 func Show(offlineTime time.Duration) {
