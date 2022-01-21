@@ -168,7 +168,6 @@ func GetClientStatus() ClientStatusArray {
 		var HashRate string
 		if s.Status {
 			HashRateInt := float64(s.Size) / now.Sub(s.ConnTime).Seconds() * 1.6
-			fmt.Println(HashRateInt, now.Sub(s.ConnTime).Seconds(), s.Size)
 			switch {
 			case HashRateInt < 1000:
 				HashRate = fmt.Sprintf("%.2f MH/S", HashRateInt)
