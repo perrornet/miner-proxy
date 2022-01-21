@@ -48,11 +48,12 @@ func (p *Proxy) Start() {
 		}
 	}()
 
-	conn, err := p.connRemote()
+	conn, err := p.Init()
 	if err != nil || conn == nil {
 		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放", p.raddr.String()), nil)
 		return
 	}
+
 	if !p.IsClient {
 		status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, conn.RemoteAddr().String())
 	}
@@ -257,73 +258,89 @@ func (p *Proxy) SendRandomData(dst io.Writer) {
 	}
 }
 
-func (p *Proxy) connRemote() (net.Conn, error) {
+func (p *Proxy) Init() (net.Conn, error) {
 	if p.IsClient {
 		conn, err := net.Dial("tcp", p.raddr.String())
 		if err != nil {
 			return nil, err
 		}
+
+		// 发送本地内网地址
+		clientIp := p.lconn.(net.Conn).RemoteAddr().String()
+		EnData, err := p.EncryptionData([]byte(fmt.Sprintf("client_address%s", clientIp)))
+		if err != nil {
+			return nil, err
+		}
+		pkg.Debug("向服务端发送客户端地址: %s", clientIp)
+		if err := NewPackage(EnData).Pack(conn); err != nil {
+			return nil, err
+		}
 		if p.SendRemoteAddr == "" {
 			return conn, nil
 		}
-		EnData, err := p.EncryptionData([]byte(fmt.Sprintf("remote_address%s", p.SendRemoteAddr)))
+
+		// 发送远端地址
+		EnData, err = p.EncryptionData([]byte(fmt.Sprintf("remote_address%s", p.SendRemoteAddr)))
 		if err != nil {
 			return nil, err
 		}
 		pkg.Debug("向服务端发送远程地址: %s", p.SendRemoteAddr)
 		return conn, NewPackage(EnData).Pack(conn)
 	}
-
-	// 服务端读取远端数据
 	var conn net.Conn
 	var err error
-	err = new(Package).Read(p.lconn, func(pck Package) {
-		deData, err := p.DecryptData(pck.Data)
-		if err != nil {
-			p.err("检查客户端密钥是否与服务端密钥一致!", nil)
-			return
-		}
-		if len(deData) == 0 {
-			return
-		}
-		if bytes.HasPrefix(deData, randomStart) {
-			pkg.Debug("读取到 %d 随机混淆数据", len(deData))
-			return
-		}
-		if bytes.HasPrefix(deData, []byte("remote_address")) {
-			deData = bytes.Replace(deData, []byte("remote_address"), nil, 1)
-			pkg.Debug("使用客户端指定的远程地址 %s", deData)
-			tcpAdder, err := net.ResolveTCPAddr("tcp", string(deData))
-
+	var loopStop bool
+	for !loopStop {
+		// 服务端读取客户端数据
+		err = new(Package).Read(p.lconn, func(pck Package) {
+			deData, err := p.DecryptData(pck.Data)
 			if err != nil {
-				p.err("连接客户端发送的远程地址失败", err)
+				p.err("检查客户端密钥是否与服务端密钥一致!", nil)
 				return
 			}
-
-			p.raddr = tcpAdder
-			conn, err = net.DialTimeout("tcp", p.raddr.String(), time.Second*10)
-			if err != nil {
-				p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
+			if len(deData) == 0 {
 				return
 			}
+			switch {
+			case bytes.HasPrefix(deData, []byte("remote_address")):
+				loopStop = true
+				deData = bytes.Replace(deData, []byte("remote_address"), nil, 1)
+				pkg.Debug("使用客户端指定的远程地址 %s", deData)
+				tcpAdder, err := net.ResolveTCPAddr("tcp", string(deData))
 
+				if err != nil {
+					p.err("连接客户端发送的远程地址失败", err)
+					return
+				}
+
+				p.raddr = tcpAdder
+				conn, err = net.DialTimeout("tcp", p.raddr.String(), time.Second*10)
+				if err != nil {
+					p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
+					return
+				}
+
+				return
+			case bytes.HasPrefix(deData, []byte("client_address")):
+				deData = bytes.Replace(deData, []byte("client_address"), nil, 1)
+				status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, "", string(deData))
+			default:
+				loopStop = true
+				// 直接使用服务端指定的远程地址
+				conn, err = net.Dial("tcp", p.raddr.String())
+				if err != nil {
+					p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
+					return
+				}
+
+				_, err = conn.Write(deData)
+				if err != nil {
+					p.err("写入数据到远程地址失败", err)
+				}
+			}
 			return
-		}
-
-		// 直接使用服务端指定的远程地址
-		conn, err = net.Dial("tcp", p.raddr.String())
-		if err != nil {
-			p.err(fmt.Sprintf("连接远程地址失败, 请检查 %s 是否能够连接", p.raddr.String()), nil)
-			return
-		}
-
-		_, err = conn.Write(deData)
-		if err != nil {
-			p.err("写入数据到远程地址失败", err)
-		}
-		return
-	})
-
+		})
+	}
 	return conn, err
 }
 

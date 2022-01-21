@@ -3,6 +3,7 @@ package status
 import (
 	"fmt"
 	"miner-proxy/pkg"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,6 +133,66 @@ func Show(offlineTime time.Duration) {
 	}
 }
 
+type ClientStatus struct {
+	Ip              string `json:"ip"`
+	Size            string `json:"size"`
+	ConnectDuration string `json:"connect_duration"`
+	RemoteAddr      string `json:"remote_addr"`
+	IsOnline        bool   `json:"is_online"`
+	// 根据传输数据大小判断预估算力
+	HashRate        string `json:"hash_rate"`
+	connectDuration time.Duration
+}
+
+type ClientStatusArray []ClientStatus
+
+func (c ClientStatusArray) Len() int {
+	return len(c)
+}
+
+func (c ClientStatusArray) Less(i, j int) bool {
+	return c[i].connectDuration.Nanoseconds() > c[j].connectDuration.Nanoseconds()
+}
+
+// Swap swaps the elements with indexes i and j.
+func (c ClientStatusArray) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+
+}
+
+func GetClientStatus() ClientStatusArray {
+	var result ClientStatusArray
+	now := time.Now()
+	status.Range(func(key, value interface{}) bool {
+		s := value.(*Status)
+		var HashRate string
+		if s.Status {
+			HashRateInt := float64(s.Size) / now.Sub(s.ConnTime).Seconds() * 1.6
+			fmt.Println(HashRateInt, now.Sub(s.ConnTime).Seconds(), s.Size)
+			switch {
+			case HashRateInt < 1000:
+				HashRate = fmt.Sprintf("%.2f MH/S", HashRateInt)
+			case HashRateInt >= 1000 && HashRateInt < 1000*1000:
+				HashRate = fmt.Sprintf("%.2f G/S", HashRateInt)
+			case HashRateInt >= 1000*1000:
+				HashRate = fmt.Sprintf("%.2f T/S", HashRateInt)
+			}
+		}
+		result = append(result, ClientStatus{
+			Ip:              s.Ip,
+			Size:            humanize.Bytes(uint64(s.Size)),
+			ConnectDuration: now.Sub(s.ConnTime).String(),
+			RemoteAddr:      s.RemoteAddress,
+			IsOnline:        s.Status,
+			connectDuration: now.Sub(s.ConnTime),
+			HashRate:        HashRate,
+		})
+		return true
+	})
+	sort.Sort(result)
+	return result
+}
+
 func SendOfflineIps(offlineIps []string) {
 	if len(offlineIps) <= 0 {
 		return
@@ -151,10 +212,15 @@ func SendOfflineIps(offlineIps []string) {
 	})
 }
 
-func Add(ip string, size int64, remoteAddress string) {
+func Add(ip string, size int64, remoteAddress string, clientIp ...string) {
 	v, _ := status.LoadOrStore(ip, &Status{Ip: ip, ConnTime: time.Now(), RemoteAddress: remoteAddress, Status: true})
 	obj := v.(*Status)
-	obj.RemoteAddress = remoteAddress
+	if len(clientIp) != 0 && clientIp[0] != "" {
+		obj.Ip = clientIp[0]
+	}
+	if remoteAddress != "" {
+		obj.RemoteAddress = remoteAddress
+	}
 	obj.Size += size
 	atomic.AddInt64(&totalSzie, size)
 	status.Store(ip, obj)

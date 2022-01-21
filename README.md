@@ -11,7 +11,7 @@ https://user-images.githubusercontent.com/23651751/148649355-03d04371-efb9-4c80-
 
 在 [Releases](https://github.com/PerrorOne/miner-proxy/releases) 选择适合你系统的二进制文件下载
 ### 您也可以自行编译
-* golang version >= 1.13
+* golang version >= 1.17
 * `git clone https://github.com/PerrorOne/miner-proxy && cd miner-proxy`
 * `go mod tidy && cd ./cmd/miner-proxy && go build .`
 

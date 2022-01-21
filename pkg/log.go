@@ -1,8 +1,8 @@
 package pkg
 
 import (
+	"io"
 	"os"
-	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -32,7 +32,7 @@ func initOutFunc() {
 	}
 }
 
-func InitLog(level zapcore.Level, logfile string) {
+func InitLog(level zapcore.Level, logfile string, syncs ...io.Writer) {
 	encoderConfig := &zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
@@ -59,6 +59,9 @@ func InitLog(level zapcore.Level, logfile string) {
 		}
 		ws = append(ws, zapcore.AddSync(hook))
 	}
+	for _, v := range syncs {
+		ws = append(ws, zapcore.AddSync(v))
+	}
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(*encoderConfig),
 		zapcore.NewMultiWriteSyncer(ws...), atomicLevel)
 
@@ -68,19 +71,6 @@ func InitLog(level zapcore.Level, logfile string) {
 	}
 	_log = zap.New(core, options...)
 	initOutFunc()
-}
-
-func StrLevel2zAPlEVEL(level string) zapcore.Level {
-	switch strings.ToLower(level) {
-	case "info":
-		return zapcore.InfoLevel
-	case "Warn":
-		return zapcore.WarnLevel
-	case "error":
-		return zapcore.ErrorLevel
-	default:
-		return zapcore.DebugLevel
-	}
 }
 
 func outByLog(level zapcore.Level, msg string, v ...interface{}) {
