@@ -120,6 +120,7 @@ func (p *proxyService) startHttpServer() {
 	app.NoRoute(func(c *gin.Context) {
 		c.Data(http.StatusOK, "text/html", indexHtml)
 	})
+	pkg.Info("网页查看状态端口为: ", *api)
 	if err := app.Run(*api); err != nil {
 		pkg.Panic(err.Error())
 	}
@@ -193,9 +194,6 @@ func (p *proxyService) run() {
 			}
 		}()
 		go p.startHttpServer()
-	}
-	if *isClient {
-		go status.ShowDelay(time.Second * 30)
 	}
 
 	if *isClient && *randomSendHttp {

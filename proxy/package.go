@@ -8,10 +8,8 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"miner-proxy/pkg/status"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type BufferedConn struct {
@@ -94,27 +92,21 @@ func NewPackage(data []byte) *Package {
 }
 
 func (p *Package) Pack(writer io.Writer) error {
-	startTime := time.Now()
 	if _, err := writer.Write([]byte{uint8(PackageStart)}); err != nil {
 		return err
 	}
-	status.UpdateTimeParse(time.Since(startTime).Nanoseconds())
 	length := strconv.Itoa(p.Length)
 	var lengthBuf = bytes.NewBufferString(length)
 	for lengthBuf.Len() < 10 {
 		lengthBuf.WriteString("-")
 	}
-	startTime = time.Now()
 	if _, err := writer.Write(lengthBuf.Bytes()); err != nil {
 		return err
 	}
-	status.UpdateTimeParse(time.Since(startTime).Nanoseconds())
 
-	startTime = time.Now()
 	if _, err := writer.Write(p.Data); err != nil {
 		return err
 	}
-	status.UpdateTimeParse(time.Since(startTime).Nanoseconds())
 	return nil
 }
 

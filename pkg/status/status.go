@@ -21,17 +21,17 @@ var (
 	startTime       = time.Now()
 	pushers         sync.Map
 	m               sync.Mutex
-	parseTime       int64
-	totalParseCount int64
 )
 
 type Status struct {
-	Ip            string    `json:"ip"`
-	Status        bool      `json:"status"`
-	StopTime      time.Time `json:"stop_time"`
-	Size          int64     `json:"size"`
-	ConnTime      time.Time `json:"conn_time"`
-	RemoteAddress string    `json:"remote_address"`
+	Ip            string        `json:"ip"`
+	Status        bool          `json:"status"`
+	StopTime      time.Time     `json:"stop_time"`
+	Size          int64         `json:"size"`
+	ConnTime      time.Time     `json:"conn_time"`
+	RemoteAddress string        `json:"remote_address"`
+	Delay         time.Duration `json:"delay"`
+	PingTime      time.Time     `json:"start_ping_time"`
 }
 
 func init() {
@@ -51,32 +51,6 @@ func init() {
 			time.Sleep(time.Second*5*60 + 30) // 每5分30秒执行一次
 		}
 	}()
-}
-
-func UpdateTimeParse(t int64) {
-	atomic.AddInt64(&parseTime, t)
-	atomic.AddInt64(&totalParseCount, 1)
-}
-
-func clearTimeParse() {
-	atomic.StoreInt64(&parseTime, 0)
-	atomic.StoreInt64(&totalParseCount, 0)
-}
-
-func ShowDelay(sleepTime time.Duration) {
-	defer func() {
-		time.AfterFunc(sleepTime, func() {
-			ShowDelay(sleepTime)
-		})
-	}()
-	p := atomic.LoadInt64(&parseTime)
-	t := atomic.LoadInt64(&totalParseCount)
-	if p == 0 || t == 0 {
-		return
-	}
-
-	pkg.Info("本地到服务器 %s 内延迟为 %s", sleepTime.String(), time.Duration(float64(p)/float64(t)).String())
-	clearTimeParse()
 }
 
 func Show(offlineTime time.Duration) {
@@ -141,6 +115,7 @@ type ClientStatus struct {
 	IsOnline        bool   `json:"is_online"`
 	// 根据传输数据大小判断预估算力
 	HashRate        string `json:"hash_rate"`
+	Delay           string `json:"delay"`
 	connectDuration time.Duration
 }
 
@@ -177,6 +152,11 @@ func GetClientStatus() ClientStatusArray {
 				HashRate = fmt.Sprintf("%.2f T/S", HashRateInt)
 			}
 		}
+
+		var delay string
+		if s.Delay.Microseconds() > 0 {
+			delay = s.Delay.String()
+		}
 		result = append(result, ClientStatus{
 			Ip:              s.Ip,
 			Size:            humanize.Bytes(uint64(s.Size)),
@@ -185,6 +165,7 @@ func GetClientStatus() ClientStatusArray {
 			IsOnline:        s.Status,
 			connectDuration: now.Sub(s.ConnTime),
 			HashRate:        HashRate,
+			Delay:           delay,
 		})
 		return true
 	})
@@ -222,6 +203,30 @@ func Add(ip string, size int64, remoteAddress string, clientIp ...string) {
 	}
 	obj.Size += size
 	atomic.AddInt64(&totalSzie, size)
+	status.Store(ip, obj)
+}
+
+func SetPing(ip string) {
+	v, ok := status.Load(ip)
+	if !ok {
+		return
+	}
+	obj := v.(*Status)
+	obj.PingTime = time.Now()
+	status.Store(ip, obj)
+}
+
+func SetPong(ip string) {
+	v, ok := status.Load(ip)
+	if !ok {
+		return
+	}
+	obj := v.(*Status)
+	obj.Delay = time.Now().Sub(obj.PingTime)
+	if obj.Delay.Seconds() < 0 {
+		return
+	}
+	obj.PingTime = time.Time{}
 	status.Store(ip, obj)
 }
 

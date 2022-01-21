@@ -54,10 +54,6 @@ func (p *Proxy) Start() {
 		return
 	}
 
-	if !p.IsClient {
-		status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, conn.RemoteAddr().String())
-	}
-
 	p.rconn = conn
 	defer p.rconn.Close()
 
@@ -66,7 +62,9 @@ func (p *Proxy) Start() {
 	go p.pipe(p.rconn, p.lconn)
 
 	if !p.IsClient { // 由于挖矿的特性, 只需要在服务端向客户端 发送随机数据
+		status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, conn.RemoteAddr().String())
 		go p.SendRandomData(p.lconn)
+		go p.ping(p.lconn)
 	}
 
 	//wait for close...
@@ -100,6 +98,8 @@ var (
 	randomStart         = []byte("random-proxy")
 	// 启动时随机生成
 	randomPingData [][]byte
+	PING           = []byte("ping")
+	PONG           = []byte("pong")
 )
 
 func init() {
@@ -224,6 +224,20 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 			pkg.Debug("读取到 %d 随机混淆数据", len(deData))
 			return
 		}
+		if p.IsClient && bytes.Equal(deData, PING) {
+			c := reader.(net.Conn)
+			EnData, _ := p.EncryptionData(PONG)
+			if err := NewPackage(EnData).Pack(c); err != nil {
+				pkg.Debug("写入pong数据失败 %s", err.Error())
+			}
+			return
+		}
+		if !p.IsClient && bytes.Equal(deData, PONG) {
+			c := reader.(net.Conn)
+			status.SetPong(c.RemoteAddr().String())
+			return
+		}
+
 		pkg.Debug("读取到 %d 加密数据, 解密后数据大小 %d", len(pck.Data), len(deData))
 		if c, ok := writer.(net.Conn); ok && !p.IsClient {
 			status.Add(reader.(net.Conn).RemoteAddr().String(), int64(len(pck.Data)), c.RemoteAddr().String())
@@ -343,6 +357,23 @@ func (p *Proxy) Init() (net.Conn, error) {
 		})
 	}
 	return conn, err
+}
+
+func (p *Proxy) ping(dst io.Writer) {
+	ip := dst.(net.Conn).RemoteAddr().String()
+	for !p.erred {
+		time.Sleep(time.Second * 5)
+		status.SetPing(ip)
+		EnData, err := p.EncryptionData(PING)
+		if err != nil {
+			p.err("加密ping数据失败 %s", err)
+			return
+		}
+		if err := NewPackage(EnData).Pack(dst); err != nil {
+			p.err("向服务端写入PING数据失败 %s", err)
+			return
+		}
+	}
 }
 
 func (p *Proxy) pipe(src, dst io.ReadWriter) {
