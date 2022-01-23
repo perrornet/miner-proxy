@@ -11,6 +11,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/liushuochen/gotable"
+	"github.com/spf13/cast"
 	"github.com/wxpusher/wxpusher-sdk-go/model"
 )
 
@@ -25,6 +26,7 @@ var (
 
 type Status struct {
 	Ip            string        `json:"ip"`
+	ClientIp      string        `json:"client_ip"`
 	Status        bool          `json:"status"`
 	StopTime      time.Time     `json:"stop_time"`
 	Size          int64         `json:"size"`
@@ -32,6 +34,39 @@ type Status struct {
 	RemoteAddress string        `json:"remote_address"`
 	Delay         time.Duration `json:"delay"`
 	PingTime      time.Time     `json:"start_ping_time"`
+}
+
+func (s Status) GetStatus() ClientStatus {
+	now := time.Now()
+	var HashRate string
+	if s.Status {
+		HashRateInt := float64(s.Size) / now.Sub(s.ConnTime).Seconds() * 0.85
+		switch {
+		case HashRateInt < 1000:
+			HashRate = fmt.Sprintf("%.2f MH/S", HashRateInt)
+		default:
+			HashRate = fmt.Sprintf("%.2f G/S", HashRateInt)
+		}
+	}
+
+	var delay string
+	if s.Delay.Microseconds() > 0 {
+		delay = s.Delay.String()
+	}
+	var ip = s.Ip
+	if s.ClientIp != "" {
+		ip = s.ClientIp
+	}
+	return ClientStatus{
+		Ip:              ip,
+		Size:            humanize.Bytes(uint64(s.Size)),
+		ConnectDuration: now.Sub(s.ConnTime).String(),
+		RemoteAddr:      s.RemoteAddress,
+		IsOnline:        s.Status,
+		connectDuration: now.Sub(s.ConnTime),
+		HashRate:        HashRate,
+		Delay:           delay,
+	}
 }
 
 func init() {
@@ -54,33 +89,35 @@ func init() {
 }
 
 func Show(offlineTime time.Duration) {
-	table, _ := gotable.Create("Ip", "传输数据大小", "连接时长", "矿池")
+	table, _ := gotable.Create("Ip", "传输数据大小", "连接时长", "是否在线", "客户端-服务端延迟", "矿池连接", "预估算力(仅通过流量大小判断)")
 	var result []map[string]string
 	var total int64
 	now := time.Now()
 	var (
 		offlineIps     []string
+		realOfflineIps []string
 		nowOnlineCount int64
 	)
 
 	status.Range(func(key, value interface{}) bool {
 		s := value.(*Status)
-		if !s.Status && time.Since(s.StopTime).Minutes() >= offlineTime.Minutes() { // 掉线1分钟后, 提醒
 
-			offlineIps = append(offlineIps, s.Ip)
-			return true
-		}
-
-		if !s.Status {
-			return true
-		}
 		nowOnlineCount++
 		total += s.Size
+		clientStatus := s.GetStatus()
+		if !s.Status && time.Since(s.StopTime).Seconds() >= offlineTime.Seconds() {
+			offlineIps = append(offlineIps, clientStatus.Ip)
+			realOfflineIps = append(realOfflineIps, cast.ToString(key))
+			return true
+		}
 		result = append(result, map[string]string{
-			"Ip":     s.Ip,
-			"传输数据大小": humanize.Bytes(uint64(s.Size)),
-			"连接时长":   now.Sub(s.ConnTime).String(),
-			"矿池":     s.RemoteAddress,
+			"Ip":        clientStatus.Ip,
+			"传输数据大小":    clientStatus.Size,
+			"连接时长":      clientStatus.ConnectDuration,
+			"矿池连接":      clientStatus.RemoteAddr,
+			"是否在线":      cast.ToString(clientStatus.IsOnline),
+			"客户端-服务端延迟": clientStatus.Delay,
+			"预估算力(仅通过流量大小判断)": clientStatus.HashRate,
 		})
 		return true
 	})
@@ -90,10 +127,19 @@ func Show(offlineTime time.Duration) {
 		"连接时长":   now.Sub(startTime).String(),
 		"矿池":     "",
 	})
+	result = append(result, map[string]string{
+		"Ip":        "总计",
+		"传输数据大小":    humanize.Bytes(uint64(atomic.LoadInt64(&totalSzie))),
+		"连接时长":      now.Sub(startTime).String(),
+		"矿池连接":      "-",
+		"是否在线":      "-",
+		"客户端-服务端延迟": "-",
+		"预估算力(仅通过流量大小判断)": "-",
+	})
 	table.AddRows(result)
 	fmt.Println(table.String())
 	// 删除这些过期的ip
-	for _, v := range offlineIps {
+	for _, v := range realOfflineIps {
 		status.Delete(v)
 	}
 
@@ -137,36 +183,8 @@ func (c ClientStatusArray) Swap(i, j int) {
 
 func GetClientStatus() ClientStatusArray {
 	var result ClientStatusArray
-	now := time.Now()
 	status.Range(func(key, value interface{}) bool {
-		s := value.(*Status)
-		var HashRate string
-		if s.Status {
-			HashRateInt := float64(s.Size) / now.Sub(s.ConnTime).Seconds() * 1.6
-			switch {
-			case HashRateInt < 1000:
-				HashRate = fmt.Sprintf("%.2f MH/S", HashRateInt)
-			case HashRateInt >= 1000 && HashRateInt < 1000*1000:
-				HashRate = fmt.Sprintf("%.2f G/S", HashRateInt)
-			case HashRateInt >= 1000*1000:
-				HashRate = fmt.Sprintf("%.2f T/S", HashRateInt)
-			}
-		}
-
-		var delay string
-		if s.Delay.Microseconds() > 0 {
-			delay = s.Delay.String()
-		}
-		result = append(result, ClientStatus{
-			Ip:              s.Ip,
-			Size:            humanize.Bytes(uint64(s.Size)),
-			ConnectDuration: now.Sub(s.ConnTime).String(),
-			RemoteAddr:      s.RemoteAddress,
-			IsOnline:        s.Status,
-			connectDuration: now.Sub(s.ConnTime),
-			HashRate:        HashRate,
-			Delay:           delay,
-		})
+		result = append(result, value.(*Status).GetStatus())
 		return true
 	})
 	sort.Sort(result)
@@ -184,7 +202,7 @@ func SendOfflineIps(offlineIps []string) {
 	ips = fmt.Sprintf("您有掉线的矿机:\n%s", ips)
 	pushers.Range(func(key, value interface{}) bool {
 		p := value.(*pusher)
-		pkg.Debug("发送掉线通知: %+v", p.Users)
+		pkg.Info("发送掉线通知: %+v", p.Users)
 		if err := p.SendMessage2All(ips); err != nil {
 			pkg.Error("发送通知失败: %s", err)
 		}
@@ -196,7 +214,7 @@ func Add(ip string, size int64, remoteAddress string, clientIp ...string) {
 	v, _ := status.LoadOrStore(ip, &Status{Ip: ip, ConnTime: time.Now(), RemoteAddress: remoteAddress, Status: true})
 	obj := v.(*Status)
 	if len(clientIp) != 0 && clientIp[0] != "" {
-		obj.Ip = clientIp[0]
+		obj.ClientIp = clientIp[0]
 	}
 	if remoteAddress != "" {
 		obj.RemoteAddress = remoteAddress

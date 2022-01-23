@@ -100,6 +100,7 @@ var (
 	randomPingData [][]byte
 	PING           = []byte("ping")
 	PONG           = []byte("pong")
+	localIPv4      = pkg.LocalIPv4s()
 )
 
 func init() {
@@ -282,6 +283,10 @@ func (p *Proxy) Init() (net.Conn, error) {
 
 		// 发送本地内网地址
 		clientIp := p.lconn.(net.Conn).RemoteAddr().String()
+
+		if strings.Contains(clientIp, "127.0.0.1") && localIPv4 != "" {
+			clientIp = localIPv4
+		}
 		EnData, err := p.EncryptionData([]byte(fmt.Sprintf("client_address%s", clientIp)))
 		if err != nil {
 			return nil, err
@@ -338,6 +343,7 @@ func (p *Proxy) Init() (net.Conn, error) {
 				return
 			case bytes.HasPrefix(deData, []byte("client_address")):
 				deData = bytes.Replace(deData, []byte("client_address"), nil, 1)
+				pkg.Debug("获取到客户端传递ip地址 %s", string(deData))
 				status.Add(p.lconn.(net.Conn).RemoteAddr().String(), 0, "", string(deData))
 			default:
 				loopStop = true
@@ -362,7 +368,7 @@ func (p *Proxy) Init() (net.Conn, error) {
 func (p *Proxy) ping(dst io.Writer) {
 	ip := dst.(net.Conn).RemoteAddr().String()
 	for !p.erred {
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second * 10)
 		status.SetPing(ip)
 		EnData, err := p.EncryptionData(PING)
 		if err != nil {

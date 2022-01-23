@@ -4,11 +4,6 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/jmcvetta/randutil"
-	"github.com/kardianos/service"
-	"github.com/liushuochen/gotable"
-	"go.uber.org/zap/zapcore"
 	"log"
 	"miner-proxy/pkg"
 	"miner-proxy/pkg/middleware"
@@ -20,6 +15,12 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jmcvetta/randutil"
+	"github.com/kardianos/service"
+	"github.com/liushuochen/gotable"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -120,7 +121,7 @@ func (p *proxyService) startHttpServer() {
 	app.NoRoute(func(c *gin.Context) {
 		c.Data(http.StatusOK, "text/html", indexHtml)
 	})
-	pkg.Info("网页查看状态端口为: ", *api)
+	pkg.Info("网页查看状态端口为: %s", *api)
 	if err := app.Run(*api); err != nil {
 		pkg.Panic(err.Error())
 	}
