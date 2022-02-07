@@ -71,6 +71,7 @@ func (p *Proxy) Start() {
 
 	//wait for close...
 	<-p.errsig
+	close(p.errsig)
 }
 
 func (p *Proxy) err(s string, err error) {
