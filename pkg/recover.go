@@ -13,3 +13,7 @@ func Recover(showStack bool) {
 		}
 	}
 }
+
+func Error2Null(_ error) {
+	return
+}
