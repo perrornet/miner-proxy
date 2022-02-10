@@ -41,7 +41,7 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer pkg.Recover(true)
-	defer pkg.Error2Null(p.lconn.Close())
+	defer p.lconn.Close()
 	defer func() {
 		if !p.IsClient && p.lconn != nil {
 			status.Del(p.lconn.(net.Conn).RemoteAddr().String())
@@ -49,12 +49,12 @@ func (p *Proxy) Start() {
 	}()
 	conn, err := p.Init()
 	if err != nil || conn == nil {
-		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放", p.raddr.String()), nil)
+		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放: %%s", p.raddr.String()), err)
 		return
 	}
 
 	p.rconn = conn
-	defer pkg.Error2Null(p.rconn.Close())
+	defer p.rconn.Close()
 
 	//bidirectional copy
 	go p.pipe(p.lconn, p.rconn)
@@ -68,7 +68,6 @@ func (p *Proxy) Start() {
 
 	//wait for close...
 	<-p.errsig
-	close(p.errsig)
 }
 
 func (p *Proxy) err(s string, err error) {
@@ -405,16 +404,16 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 			switch {
 			case strings.Contains(name, "读取加密数据, 发送明文"):
 				if p.IsClient {
-					p.err("检查服务服是否正确启动, 服务器防火墙是否开启, 本地网络到服务器网络是否畅通, 矿机端是否设置正确", nil)
+					p.err("检查服务服是否正确启动, 服务器防火墙是否开启, 本地网络到服务器网络是否畅通, 矿机端是否设置正确: %s", err)
 					return
 				}
-				p.err("客户端关闭了连接, 请检查矿机/客户端设置", nil)
+				p.err("客户端关闭了连接, 请检查矿机/客户端设置: %s", err)
 			default:
 				if p.IsClient {
-					p.err("矿机关闭了连接, 请检查矿机设置正常", nil)
+					p.err("矿机关闭了连接, 请检查矿机设置正常: %s", err)
 					return
 				}
-				p.err("矿池关闭了连接, 请检查矿池/矿机/客户端设置", nil)
+				p.err("矿池关闭了连接, 请检查矿池/矿机/客户端设置: %s", err)
 			}
 			return
 		}
