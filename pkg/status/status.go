@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	totalSzie       int64
+	totalSize       int64
 	status          sync.Map
-	lastonlineCount int64
+	lastOnlineCount int64
 	startTime       = time.Now()
 	pushers         sync.Map
 	m               sync.Mutex
@@ -123,13 +123,13 @@ func Show(offlineTime time.Duration) {
 	})
 	result = append(result, map[string]string{
 		"Ip":     "总计",
-		"传输数据大小": humanize.Bytes(uint64(atomic.LoadInt64(&totalSzie))),
+		"传输数据大小": humanize.Bytes(uint64(atomic.LoadInt64(&totalSize))),
 		"连接时长":   now.Sub(startTime).String(),
 		"矿池":     "",
 	})
 	result = append(result, map[string]string{
 		"Ip":        "总计",
-		"传输数据大小":    humanize.Bytes(uint64(atomic.LoadInt64(&totalSzie))),
+		"传输数据大小":    humanize.Bytes(uint64(atomic.LoadInt64(&totalSize))),
 		"连接时长":      now.Sub(startTime).String(),
 		"矿池连接":      "-",
 		"是否在线":      "-",
@@ -143,13 +143,13 @@ func Show(offlineTime time.Duration) {
 		status.Delete(v)
 	}
 
-	if nowOnlineCount < lastonlineCount { // 掉线通知
+	if nowOnlineCount < lastOnlineCount { // 掉线通知
 		go SendOfflineIps(offlineIps)
 		if len(offlineIps) != 0 {
-			lastonlineCount = nowOnlineCount
+			lastOnlineCount = nowOnlineCount
 		}
 	} else {
-		lastonlineCount = nowOnlineCount
+		lastOnlineCount = nowOnlineCount
 	}
 }
 
@@ -181,14 +181,24 @@ func (c ClientStatusArray) Swap(i, j int) {
 
 }
 
-func GetClientStatus() ClientStatusArray {
-	var result ClientStatusArray
+func GetClientStatus() (result ClientStatusArray) {
 	status.Range(func(key, value interface{}) bool {
-		result = append(result, value.(*Status).GetStatus())
+		s := value.(*Status)
+		result = append(result, s.GetStatus())
 		return true
 	})
 	sort.Sort(result)
-	return result
+	result = append(result, ClientStatus{
+		Ip:              "总计",
+		Size:            humanize.Bytes(uint64(totalSize)),
+		ConnectDuration: time.Since(startTime).String(),
+		RemoteAddr:      " - ",
+		IsOnline:        true,
+		HashRate:        " - ",
+		Delay:           " - ",
+		connectDuration: 0,
+	})
+	return
 }
 
 func SendOfflineIps(offlineIps []string) {
@@ -220,8 +230,12 @@ func Add(ip string, size int64, remoteAddress string, clientIp ...string) {
 		obj.RemoteAddress = remoteAddress
 	}
 	obj.Size += size
-	atomic.AddInt64(&totalSzie, size)
+	atomic.AddInt64(&totalSize, size)
 	status.Store(ip, obj)
+}
+
+func ClearTotalSize() {
+	atomic.StoreInt64(&totalSize, 0)
 }
 
 func SetPing(ip string) {

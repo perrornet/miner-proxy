@@ -41,13 +41,12 @@ func New(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) *Proxy {
 // Start - open connection to remote and start proxying data.
 func (p *Proxy) Start() {
 	defer pkg.Recover(true)
-	defer p.lconn.Close()
+	defer pkg.Error2Null(p.lconn.Close())
 	defer func() {
-		if !p.IsClient && p.rconn != nil {
+		if !p.IsClient && p.lconn != nil {
 			status.Del(p.lconn.(net.Conn).RemoteAddr().String())
 		}
 	}()
-
 	conn, err := p.Init()
 	if err != nil || conn == nil {
 		p.err(fmt.Sprintf("请检查 %s 是否能够联通, 可以使用tcping 工具测试, 并检查该ip所在的防火墙是否开放", p.raddr.String()), nil)
@@ -55,7 +54,7 @@ func (p *Proxy) Start() {
 	}
 
 	p.rconn = conn
-	defer p.rconn.Close()
+	defer pkg.Error2Null(p.rconn.Close())
 
 	//bidirectional copy
 	go p.pipe(p.lconn, p.rconn)
@@ -77,9 +76,7 @@ func (p *Proxy) err(s string, err error) {
 		return
 	}
 	switch err {
-	case nil:
-		pkg.Warn(s)
-	case io.EOF:
+	case nil, io.EOF:
 	default:
 		pkg.Warn(s, err)
 	}
@@ -258,8 +255,6 @@ func (p *Proxy) ReadEncryptionSendPlaintext(reader io.Reader, writer io.Writer) 
 func (p *Proxy) SendRandomData(dst io.Writer) {
 	sleepTime, _ := randutil.IntRange(3, 15)
 	for !p.erred {
-		time.Sleep(time.Second * time.Duration(sleepTime))
-
 		// 写入随机数据
 		index, _ := randutil.IntRange(0, len(randomPingData))
 		data, err := p.EncryptionData(append(randomStart, randomPingData[index]...))
@@ -271,6 +266,7 @@ func (p *Proxy) SendRandomData(dst io.Writer) {
 			p.err("客户端关闭了连接, 请检查客户端设置, 或者客户端至本服务器的网络情况", nil)
 			return
 		}
+		time.Sleep(time.Second * time.Duration(sleepTime))
 	}
 }
 
@@ -361,6 +357,9 @@ func (p *Proxy) Init() (net.Conn, error) {
 			}
 			return
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return conn, err
 }
@@ -368,7 +367,6 @@ func (p *Proxy) Init() (net.Conn, error) {
 func (p *Proxy) ping(dst io.Writer) {
 	ip := dst.(net.Conn).RemoteAddr().String()
 	for !p.erred {
-		time.Sleep(time.Second * 10)
 		status.SetPing(ip)
 		EnData, err := p.EncryptionData(PING)
 		if err != nil {
@@ -379,16 +377,17 @@ func (p *Proxy) ping(dst io.Writer) {
 			p.err("向服务端写入PING数据失败 %s", err)
 			return
 		}
+		time.Sleep(time.Second * 10)
 	}
 }
 
 func (p *Proxy) pipe(src, dst io.ReadWriter) {
 	defer pkg.Recover(true)
-	islocal := src == p.lconn
+	isLocal := src == p.lconn
 	var f func(reader io.Reader, writer io.Writer) error
 	var name string
 	switch {
-	case p.IsClient == islocal:
+	case p.IsClient == isLocal:
 		name = "读取明文, 发送加密数据"
 		f = p.ReadByPlaintextSendEncryption
 	default:
@@ -410,7 +409,6 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 					return
 				}
 				p.err("客户端关闭了连接, 请检查矿机/客户端设置", nil)
-				return
 			default:
 				if p.IsClient {
 					p.err("矿机关闭了连接, 请检查矿机设置正常", nil)

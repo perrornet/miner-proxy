@@ -8,8 +8,10 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type BufferedConn struct {
@@ -131,7 +133,9 @@ func (p *Package) Read(reader io.Reader, f func(Package)) error {
 	var data = make([]byte, 1)
 	var buf []byte
 	var length int
+	c := reader.(net.Conn)
 	for {
+		_ = c.SetReadDeadline(time.Now().Add(time.Second * 120))
 		n, err := reader.Read(data)
 		if err != nil {
 			return err

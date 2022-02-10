@@ -24,25 +24,24 @@ import (
 )
 
 var (
-	localAddr            = flag.String("l", ":9999", "本地监听地址")
-	remoteAddr           = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
-	SendRemoteAddr       = flag.String("sr", "", "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接")
-	secretKey            = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
-	isClient             = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
-	UseSendConfusionData = true
-	debug                = flag.Bool("debug", false, "是否开启debug")
-	install              = flag.Bool("install", false, "添加到系统服务, 并且开机自动启动")
-	remove               = flag.Bool("remove", false, "移除系统服务, 并且关闭开机自动启动")
-	stop                 = flag.Bool("stop", false, "暂停代理服务")
-	restart              = flag.Bool("restart", false, "重启代理服务")
-	start                = flag.Bool("start", false, "启动代理服务")
-	stat                 = flag.Bool("stat", false, "查看代理服务状态")
-	logFile              = flag.String("log_file", "", "将日志输入到文件中, 示例: ./miner-proxy.log")
-	randomSendHttp       = flag.Bool("rsh", false, "是否随机时间发送随机http请求混淆, 支持客户端")
-	wxPusherToken        = flag.String("wx", "", "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken")
-	newWxPusherUser      = flag.Bool("add_wx_user", false, "绑定微信账号到微信通知中, 该参数只有在服务端生效")
-	offlineTime          = flag.Int64("offline", 60*4, "掉线多少秒之后, 发送微信通知")
-	api                  = flag.String("api", "0.0.0.0:4567", "网页端口, 0.0.0.0代表所有ip运行访问")
+	localAddr       = flag.String("l", ":9999", "本地监听地址")
+	remoteAddr      = flag.String("r", "localhost:80", "远程代理地址或者远程本程序的监听地址")
+	SendRemoteAddr  = flag.String("sr", "", "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接")
+	secretKey       = flag.String("secret_key", "", "数据包加密密钥, 只有远程地址也是本服务时才可使用")
+	isClient        = flag.Bool("client", false, "是否是客户端, 该参数必须准确, 默认服务端, 只有 secret_key 不为空时需要区分")
+	debug           = flag.Bool("debug", false, "是否开启debug")
+	install         = flag.Bool("install", false, "添加到系统服务, 并且开机自动启动")
+	remove          = flag.Bool("remove", false, "移除系统服务, 并且关闭开机自动启动")
+	stop            = flag.Bool("stop", false, "暂停代理服务")
+	restart         = flag.Bool("restart", false, "重启代理服务")
+	start           = flag.Bool("start", false, "启动代理服务")
+	stat            = flag.Bool("stat", false, "查看代理服务状态")
+	logFile         = flag.String("log_file", "", "将日志输入到文件中, 示例: ./miner-proxy.log")
+	randomSendHttp  = flag.Bool("rsh", false, "是否随机时间发送随机http请求混淆, 支持客户端")
+	wxPusherToken   = flag.String("wx", "", "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken")
+	newWxPusherUser = flag.Bool("add_wx_user", false, "绑定微信账号到微信通知中, 该参数只有在服务端生效")
+	offlineTime     = flag.Int64("offline", 60*4, "掉线多少秒之后, 发送微信通知")
+	api             = flag.String("api", "0.0.0.0:4567", "网页端口, 0.0.0.0代表所有ip运行访问")
 )
 
 var (
@@ -113,11 +112,19 @@ func (p *proxyService) startHttpServer() {
 	app := gin.New()
 	app.Use(gin.Recovery(), middleware.Cors())
 	app.GET("/api/client/status/", func(c *gin.Context) {
+		clients := status.GetClientStatus()
 		c.JSON(http.StatusOK, gin.H{
-			"data": status.GetClientStatus(),
+			"data": clients,
 		})
 		return
 	})
+
+	app.DELETE("/api/client/status/total_size/", func(c *gin.Context) {
+		status.ClearTotalSize()
+		c.JSON(http.StatusOK, gin.H{})
+		return
+	})
+
 	app.NoRoute(func(c *gin.Context) {
 		c.Data(http.StatusOK, "text/html", indexHtml)
 	})
@@ -209,7 +216,7 @@ func (p *proxyService) run() {
 		p.SecretKey = *secretKey
 		p.IsClient = *isClient
 		p.SendRemoteAddr = *SendRemoteAddr
-		p.UseSendConfusionData = UseSendConfusionData
+		p.UseSendConfusionData = true
 		go p.Start()
 	}
 }
