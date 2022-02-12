@@ -13,3 +13,8 @@ func PrintHelp() {
 	fmt.Println("项目地址: https://github.com/PerrorOne/miner-proxy")
 	fmt.Println("免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!")
 }
+
+func StringHelp() string {
+	myFigure := figure.NewFigure("Miner Proxy", "", true)
+	return myFigure.String()
+}
