@@ -368,12 +368,13 @@ func NewService(c *cli.Context) (service.Service, error) {
 
 var (
 	Usages = []string{
-		"以服务的方式安装客户端: ./miner-proxy install --client --debug -l :9999 -r 服务端ip:服务端端口 -key 密钥 --pool 客户端指定的矿池域名:矿池端口",
-		"\t 以服务的方式安装服务端: ./miner-proxy install  --debug -l :9998 -r 默认矿池域名:默认矿池端口 -key 密钥",
+		"以服务的方式安装客户端: ./miner-proxy install -c -d -l :9999 -r 服务端ip:服务端端口 -k 密钥 -u 客户端指定的矿池域名:矿池端口",
+		"\t 以服务的方式安装服务端: ./miner-proxy install  -d -l :9998 -r 默认矿池域名:默认矿池端口 -k 密钥",
 		"\t 更新以服务的方式安装的客户端/服务端: ./miner-proxy restart",
-		"\t 在客户端/服务端添加微信掉线通知的订阅用户: ./miner-proxy add_wx_user --wx appToken",
-		"\t 服务端增加掉线通知: ./miner-proxy install  --debug -l :9998 -r 默认矿池域名:默认矿池端口 -key 密钥 --wx appToken",
+		"\t 在客户端/服务端添加微信掉线通知的订阅用户: ./miner-proxy add_wx_user -w appToken",
+		"\t 服务端增加掉线通知: ./miner-proxy install -d -l :9998 -r 默认矿池域名:默认矿池端口 -k 密钥 --w appToken",
 		"\t linux查看以服务的方式安装的日志: journalctl -f -u miner-proxy",
+		"\t 客户端监听多个端口并且每个端口转发不同的矿池: ./miner-proxy -l :监听端口1,:监听端口2,:监听端口3 -r 服务端ip:服务端端口 -u 矿池链接1,矿池链接2,矿池链接3 -k 密钥 -d",
 	}
 )
 
@@ -440,33 +441,39 @@ func main() {
 	app := &cli.App{
 		Name: pkg.StringHelp(),
 		Usage: fmt.Sprintf("\n\t 项目地址: https://github.com/PerrorOne/miner-proxy\n"+
-			"\t 免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!\n \t版本:%s\n \t更新日志:%s", version, gitCommit),
+			"\t 免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!\n\t 版本:%s\n  \t 更新日志:%s", version, gitCommit),
 		UsageText: strings.Join(Usages, "\n"),
 		Version:   fmt.Sprintf("%s: %s", version, gitCommit),
 
 		Commands: []cli.Command{
 			{
 				Name:   "install",
+				Usage:  "./miner-proxy install: 将代理安装到系统服务中, 开机自启动, 必须使用root或者管理员权限运行",
 				Action: Install,
 			},
 			{
 				Name:   "remove",
+				Usage:  "./miner-proxy remove: 将代理从系统服务中移除",
 				Action: Remove,
 			},
 			{
 				Name:   "restart",
+				Usage:  "./miner-proxy restart: 重新启动已经安装到系统服务的代理",
 				Action: Restart,
 			},
 			{
 				Name:   "start",
+				Usage:  "./miner-proxy start: 启动已经安装到系统服务的代理",
 				Action: Start,
 			},
 			{
 				Name:   "stop",
+				Usage:  "./miner-proxy start: 停止已经安装到系统服务的代理",
 				Action: Stop,
 			},
 			{
-				Name: "add_wx_user",
+				Name:  "add_wx_user",
+				Usage: "./miner-proxy add_wx_user: 添加微信用户到掉线通知中",
 				Flags: []cli.Flag{
 					cli.StringFlag{
 						Name:     "w",
