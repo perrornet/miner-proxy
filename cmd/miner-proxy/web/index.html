@@ -37,7 +37,7 @@
 
 <div style="margin-left: 35%;">
     <span >本项目属于学习测试项目, 请勿用于非法活动</span>
-    <span>项目地址: <a href="https://github.com/PerrorOne/miner-proxy" target="_blank">miner-proxy</a></span>
+    <span>项目地址: <a href="https://github.com/PerrorOne/miner-proxy" target="_blank">miner-proxy-<span name="version"></span></a></span>
 </div>
 
 
@@ -49,6 +49,14 @@
                 </div>
                 <div class="row">
                     <div class="col-sm-5 col-md-5 col-lg-5">
+                            <div class="form-group">
+                                <label>客户端版本:</label>&nbsp;&nbsp;
+                                <p style="color: red;font-size: 7px;height:7px;">* 跨大版本将会出现兼容问题, 例如:</p>
+                                <p style="color: red;font-size: 7px;height:7px;">* 0.4.0版本可以兼容 <= 0.4.9 或者 >= 0.4.0</p>
+                                <p style="color: red;font-size: 7px;height:7px;">* 0.5.9版本可以兼容 <= 0.5.9 或者 >= 0.5.0</p>
+                                <select id="client_version" class="form-control" >
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label>客户端系统类型:</label>&nbsp;&nbsp;
                                 <select id="client_system_type" class="form-control" >
@@ -146,11 +154,18 @@
     
 
     function download_client() {
+        let client_system_type = $("#client_system_type").val()
         data = {
-            client_system_type: $("#client_system_type").val(),
+            client_system_type: client_system_type,
             client_system_struct: $("#client_system_struct").val(),
             client_run_type: $("#client_run_type").val(),
+            client_version: $("#client_version").val(),
             forward: [],
+        }
+
+        if (data.client_version === ""){
+            alert("您没有选择客户端版本!")
+            return;
         }
         if (data.client_system_type === "darwin" && data.client_system_struct === "arm"){
             alert("暂不支持mac arm 版本")
@@ -190,7 +205,20 @@
                     alert_success.append(`<strong>错误</strong>${data.msg}`)
                     return
                 }
-                alert_success.append(`<strong>成功</strong>     <span>请点击<a href="${data.data}">此处</a>下载</span>`)
+                let datas = data.data.split("/")
+                let help = `
+                        <p>1. 下载完成之后上传该zip包到linux服务器中并运行 <code>unzip zip包名称</code>. 或者复制 <code>wget ${document.URL.substr(0, document.URL.length - 1) + data.data} && unzip ${datas[datas.length - 1].split("?")[0]}</code> 在linux中运行下载解压</p>
+                        <p>2. 进入解压完成的目录中运行 <code>chmod + x ./run.sh && ./run.sh</code> 即可开始运行</p>
+                `
+                if (client_system_type === "windows"){
+                    help = `<p>下载完成之后解压zip压缩包,点击run.bat运行</p>`
+                }
+
+                alert_success.append(`
+                    <strong>成功</strong>
+                        <span>请点击<a href="${data.data}">此处</a>下载</span>
+                    ${help}
+                `)
             }
         })
     }
@@ -326,6 +354,37 @@
     $(function () {
         $("#alert-success").hide()
         load()
+
+        $.ajax({
+            method: "GET",
+            url: '/api/server/version/',
+            contentType: "application/json;charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                $('*[name="version"]').text(data.data)
+                let version = data.data
+                $.ajax({
+                    method: "GET",
+                    url: 'https://api.github.com/repos/PerrorOne/miner-proxy/tags',
+                    contentType: "application/json;charset=utf-8",
+                    dataType: "json",
+                    success: function (data) {
+                        let client_version = $("#client_version")
+                        data.map((item)=>{
+                            if (version === item.name){
+                                client_version.append(`<option value="${item.name}" selected>${item.name} -- 当前服务端版本</option>`)
+                                return
+                            }
+                            client_version.append(`<option value="${item.name}">${item.name}</option>`)
+                        })
+                    }
+                })
+            }
+        })
+
+
+
+
     })
 </script>
 

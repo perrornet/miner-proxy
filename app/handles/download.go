@@ -20,6 +20,7 @@ var (
 )
 
 type ZipParams struct {
+	ClientVersion      string    `json:"client_version"`
 	ClientSystemType   string    `json:"client_system_type"`
 	ClientSystemStruct string    `json:"client_system_struct"`
 	ClientRunType      string    `json:"client_run_type"`
@@ -36,8 +37,8 @@ func (z ZipParams) ID() string {
 	for _, v := range z.Forward {
 		ports = append(ports, v.Port, v.Pool)
 	}
-	name := pkg.Crc32IEEEStr(fmt.Sprintf("%s-%s-%s-%s",
-		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, strings.Join(ports, ",")))[:10]
+	name := pkg.Crc32IEEEStr(fmt.Sprintf("%s-%s-%s-%s-%s",
+		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, strings.Join(ports, ","), z.ClientVersion))[:10]
 	return name
 }
 
@@ -115,13 +116,13 @@ func PackScriptFile(c *gin.Context) {
 	dir := filepath.Join(BASEDIR, currentDir)
 	// build download url
 
-	u := "https://github.com/PerrorOne/miner-proxy/releases/download/" + c.GetString("tag")
+	u := "https://github.com/PerrorOne/miner-proxy/releases/download/" + args.ClientVersion
 	if dgu := c.GetString("download_github_url"); dgu != "" {
 		if !strings.HasSuffix(dgu, "/") {
 			dgu = dgu + "/"
 		}
 
-		if !strings.HasPrefix(dgu, "http") {
+		if strings.HasPrefix(dgu, "http") {
 			u = fmt.Sprintf("%s%s", dgu, u)
 		}
 	}

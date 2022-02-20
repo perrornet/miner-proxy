@@ -197,7 +197,7 @@ func (ps *Server) Tick() (delay time.Duration, action gnet.Action) {
 		})
 		return true
 	})
-	delay = time.Second * 36000
+	delay = time.Second * 20
 	return
 }
 

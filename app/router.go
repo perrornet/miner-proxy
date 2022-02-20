@@ -13,6 +13,10 @@ func NewRouter(app *gin.Engine) {
 		c.JSON(200, gin.H{"data": server.ClientInfo(), "code": 200})
 	})
 
+	app.GET("/api/server/version/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"data": c.GetString("tag"), "code": 200})
+	})
+
 	app.POST("/api/client/download/", handles.PackScriptFile)
 	app.GET("/download/:fileName", handles.File)
 

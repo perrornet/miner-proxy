@@ -27,7 +27,7 @@ import (
 var (
 	// build 时加入
 	gitCommit string
-	gitTag    = "v0.5.0"
+	version   string
 	//go:embed web/index.html
 	indexHtml []byte
 )
@@ -102,7 +102,7 @@ func (p *proxyService) startHttpServer() {
 	port := strings.Split(p.args.String("l"), ":")[1]
 
 	app.Use(func(ctx *gin.Context) {
-		ctx.Set("tag", gitTag)
+		ctx.Set("tag", version)
 		ctx.Set("secretKey", p.args.String("k"))
 		ctx.Set("server_port", port)
 		ctx.Set("download_github_url", p.args.String("g"))
@@ -440,9 +440,9 @@ func main() {
 	app := &cli.App{
 		Name: pkg.StringHelp(),
 		Usage: fmt.Sprintf("\n\t 项目地址: https://github.com/PerrorOne/miner-proxy\n"+
-			"\t 免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!\n\t 版本日志: %s", gitCommit),
+			"\t 免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!\n \t版本:%s\n \t更新日志:%s", version, gitCommit),
 		UsageText: strings.Join(Usages, "\n"),
-		Version:   gitCommit,
+		Version:   fmt.Sprintf("%s: %s", version, gitCommit),
 
 		Commands: []cli.Command{
 			{
@@ -482,7 +482,7 @@ func main() {
 		Flags: flags,
 		Action: func(c *cli.Context) error {
 			pkg.PrintHelp()
-			fmt.Printf("版本日志: %s\n", gitCommit)
+			fmt.Printf("版本:%s\n更新日志:%s\n", version, gitCommit)
 			var logLevel = zapcore.InfoLevel
 			if c.Bool("d") {
 				logLevel = zapcore.DebugLevel
