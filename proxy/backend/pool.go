@@ -1,12 +1,15 @@
 package backend
 
 import (
+	"io"
 	"miner-proxy/pkg"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/cast"
 	"go.uber.org/atomic"
 )
 
@@ -75,10 +78,21 @@ func (p *PoolConn) Start() {
 
 	go func() {
 		defer p.Close()
+		defer func() {
+			if err := recover(); err != nil {
+				if strings.Contains(cast.ToString(err), "send on closed channel") {
+					return
+				}
+			}
+		}()
 		for !p.IsClosed() {
 			data := make([]byte, 1024)
 			n, err := p.conn.Read(data)
-			if err != nil {
+			switch err {
+			case nil:
+			case io.EOF:
+				return
+			default:
 				pkg.Warn("read data from miner pool error %s", err)
 				return
 			}

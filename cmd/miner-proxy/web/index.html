@@ -30,9 +30,7 @@
 
 <div style="width: 90%;margin-left: 5%">
     <span>自动刷新时间设置</span>
-    <input style="width: 50px;" value="5" id="refresh_time" type="number" min="1" onchange="refresh()"><span>秒</span>
-    <a class="btn btn-primary" onclick="ClearTotalSize()">重置总计传输数据大小</a>
-    <a class="btn btn-primary" data-toggle="modal" data-target="#show_client_model" onclick="show_client_model()">查看所有的客户端</a>
+    <input style="width: 50px;" value="30" id="refresh_time" type="number" min="1" onchange="refresh()"><span>秒</span>
     <a class="btn btn-primary" data-toggle="modal" data-target="#download_client_model">下载客户端</a>
     <table  id="client_connect_info"></table>
 </div>
@@ -43,52 +41,50 @@
 </div>
 
 
-<div class="modal fade" id="download_client_model" tabindex="-1">
-    <div class="modal-dialog" style="height: 85%;width: 1000%;">
-        <div class="modal-content" style="width: 125%;margin-left: 3%">
-            <div class="modal-body" style="height: 100%;width: 100%;color: black">
+<div class="modal fade" id="download_client_model" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 75%;">
+        <div class="modal-content" style="width: 100%;margin-left: 4%; margin-top: 5%">
+            <div class="modal-body" style="height: 85%;width: 100%;color: black">
                 <div class="alert alert-success" id="alert-success">
                 </div>
-                <div class="form-inline">
-                    <label>客户端系统类型:</label>&nbsp;&nbsp;
-                    <select id="client_system_type" class="form-control" style="width: 50%; margin-left: 1%">
-                        <option value="windows">windows</option>
-                        <option value="linux">linux</option>
-                        <option value="darwin">mac</option>
-                        <option value="freebsd">freebsd</option>
-                        <option value="netbsd">netbsd</option>
-                        <option value="OpenBSD">OpenBSD</option>
-                    </select>
-                </div>
+                <div class="row">
+                    <div class="col-sm-5 col-md-5 col-lg-5">
+                            <div class="form-group">
+                                <label>客户端系统类型:</label>&nbsp;&nbsp;
+                                <select id="client_system_type" class="form-control" >
+                                    <option value="windows">windows</option>
+                                    <option value="linux">linux</option>
+                                    <option value="darwin">mac</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>客户端系统架构:</label>&nbsp;&nbsp;
+                                <select id="client_system_struct" class="form-control" >
+                                    <option value="amd64">amd64</option>
+                                    <option value="arm">arm</option>
+                                </select>
+                            </div>
 
-                <div class="form-inline" style="margin-top: 5%">
-                    <label>客户端系统架构:</label>&nbsp;&nbsp;
-                    <select id="client_system_struct" class="form-control" style="width: 50%; margin-left: 1%">
-                        <option value="amd64">amd64</option>
-                        <option value="arm">arm</option>
-                        <option value="mips64">mips64</option>
-                        <option value="mips64le">mips64le</option>
-                        <option value="mipsle">mipsle</option>
-                    </select>
-                </div>
+                            <div class="form-group">
+                                <label>客户端运行方式:</label>&nbsp;&nbsp;
+                                <select id="client_run_type" class="form-control" >
+                                    <option value="service">服务安装(一台电脑只能安装一个)</option>
+                                    <option value="backend">后台运行(可多开)</option>
+                                    <option value="frontend">前台运行(可多开)</option>
+                                </select>
+                            </div>
 
-                <div class="form-inline" style="margin-top: 5%">
-                    <label>客户端运行方式:</label>&nbsp;&nbsp;
-                    <select id="client_run_type" class="form-control" style="width: 50%; margin-left: 1%">
-                        <option value="service">服务安装(一台电脑只能安装一个)</option>
-                        <option value="backend">后台运行(可多开)</option>
-                        <option value="frontend">前台运行(可多开)</option>
-                    </select>
-                </div>
-
-                <div class="form-inline" style="margin-top: 5%">
-                    <label>客户端监听端口:</label>&nbsp;&nbsp;
-                    <input type="number" id="client_listen_port" class="form-control" min="100" max="65535">
-                </div>
-
-                <div class="form-inline" style="margin-top: 5%">
-                    <label>矿池:</label>&nbsp;&nbsp;
-                    <input type="text" id="client_pool" class="form-control">
+                        </div>
+                    <div class="col-sm-6 col-md-6 col-lg-6">
+                            <ul style="width: 100%" id="port_forward">
+                                <li class="form-inline" id="port_forward_0">
+                                    <span>客户端监听端口:</span>&nbsp;&nbsp;
+                                    <input type="number"  class="form-control" min="100" max="65535">转发至 矿池: <input type="text" class="form-control">
+                                    <a class="btn btn-danger" onclick="remove_port_forward()" style="margin-left: 5px">删除</a>
+                                </li>
+                            </ul>
+                        <a class="btn btn-info" onclick="add_port_forward()" style="margin-left: 65%">添加更多的端口转发</a>
+                    </div>
                 </div>
             </div>
             <div class="clearfix" style="margin-right: 3%; margin-bottom: 5%;margin-left:76%">
@@ -102,82 +98,80 @@
 </div>
 
 
-<div class="modal fade" id="show_client_model" tabindex="-1">
-    <div class="modal-dialog" style="height: 85%;width: 1000%;">
-        <div class="modal-content" style="width: 125%;margin-left: 3%">
-            <div class="modal-body" style="height: 100%;width: 100%;color: black">
-                <table id="show_client_table"></table>
+<div class="modal fade" id="show_client_model" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 1024px;">
+        <div class="modal-content" style="width: 85%;margin-left: 8%; margin-top: 5%">
+            <div class="modal-body" style="height: 85%;width: 100%;color: black">
+                <table id="show_client_table">
+                </table>
             </div>
             <div class="clearfix" style="margin-right: 3%; margin-top: 4%;margin-left:76%">
-                <div class="form-inline">
-                    <a class="btn btn-danger" data-dismiss="modal" >关闭</a>
-                </div>
+                <a class="btn btn-danger" data-dismiss="modal" onclick="javascript: $('#show_client_model').modal('hide');">关闭</a>
             </div>
         </div>
     </div>
+
 </div>
 
 
 <script>
-    let refresh_time = 5
-    let refresh_job = window.setInterval(do_refresh, refresh_time * 1000)
-    
-    function show_client_model() {
-        $('#show_client_table').bootstrapTable({
-            url: '/api/clients/',
-            method: 'get',
-            cache: false,
-            height: 550,
-            uniqueId:"id",
-            dataField:"data",
-            queryParamsType: "limit",
-            sidePagination: "server",
-            totalField: 'total',
-            showRefresh: false,
-            onLoadSuccess: function (data) {
-                let allTableData = $('#show_client_table').bootstrapTable('getData');
-                if ((data === null|| data.length === 0) && allTableData.length !== 0) {
-                    $("#show_client_table").bootstrapTable('destroy');
-                    load()
-                }
-            },
-            columns: [
-                {
-                    field: 'client_id',
-                    title: '<span>客户端id</span>'
-                },
-                {
-                    field: 'connects',
-                    title: '<span>可用连接</span>',
-                    formatter: function (value, row, index) {
-                        if (value === null){
-                            return "-"
-                        }
-                        return `${value.length} 个连接`
-                    },
-                },
-                {
-                    field: 'connects',
-                    title: '<span>客户端ip</span>',
-                    formatter: function (value, row, index) {
-                        if (row.connects === null){
-                            return "-"
-                        }
-                        return row.connects[0].split(":")[0]
-                    },
-                },
-            ]
-        });
+    let INDEX = 0
+    function remove_port_forward(id) {
+        let port_forward = $("#port_forward")
+
+        if (id === undefined){
+             id = "port_forward_0"
+        }
+        port_forward = $("#" + id).remove()
     }
 
+    function add_port_forward() {
+        let port_forward = $("#port_forward")
+        INDEX++
+        let id = "port_forward_" + INDEX
+        if (port_forward.children().length === 0){
+            id = "port_forward_0"
+        }
+        port_forward.append(`
+            <li class="form-inline" id="${id}" style="margin-top: 2px;">
+                <span>客户端监听端口:</span>&nbsp;&nbsp;
+                <input type="number" name="client_port" class="form-control" min="100" max="65535">转发至 矿池: <input type="text" name="client_pool" class="form-control">
+                <a class="btn btn-danger" onclick="remove_port_forward('${id}')" style="margin-left: 5px">删除</a>
+            </li>
+
+        `)
+    }
+    let refresh_time = 30
+    let refresh_job = window.setInterval(do_refresh, refresh_time * 1000)
     
+
     function download_client() {
         data = {
             client_system_type: $("#client_system_type").val(),
             client_system_struct: $("#client_system_struct").val(),
             client_run_type: $("#client_run_type").val(),
-            client_listen_port: $("#client_listen_port").val(),
-            client_pool: $("#client_pool").val(),
+            forward: [],
+        }
+        if (data.client_system_type === "darwin" && data.client_system_struct === "arm"){
+            alert("暂不支持mac arm 版本")
+            return;
+        }
+        let forwards = $("li[id^=port_forward_]")
+        forwards.map((index)=>{
+            let children = $(forwards[index]).children()
+            let port = $(children[1])
+            let pool = $(children[2])
+            if (port.val() === "" || pool.val() === ""){
+                return
+            }
+            data.forward.push({
+                port:port.val(),
+                pool:pool.val(),
+            })
+        })
+        if (data.forward.length === 0){
+            alert("您必须填写'客户端监听端口'")
+            return
         }
         let alert_success = $("#alert-success")
         alert_success.show()
@@ -216,20 +210,53 @@
         $("button[name='refresh']").click()
     }
 
-    function ClearTotalSize() {
-        $.ajax({
-            method: "DELETE",
-            url: '/api/client/status/total_size/',
-            success: function (data) {
-                load()
-                alert("重置成功！")
-            }
-        })
+    let CLIENT_DATA = {};
+
+
+    function show_client_miners(client_id) {
+        let client = CLIENT_DATA[client_id]
+        $("#show_client_model").modal("show");
+        $("#show_client_table").bootstrapTable('destroy');
+        $('#show_client_table').bootstrapTable({
+            data: client.miners,
+            cache: false,
+            height: 500,
+            uniqueId:"id",
+            totalField: 'total',
+            showRefresh: true,
+            columns: [
+                {
+                    field: 'id',
+                    title: '<span>矿工id</span>'
+                },
+                {
+                    field: 'ip',
+                    title: '<span>矿工ip</span>',
+                },
+                {
+                    field: 'conn_time',
+                    title: '<span>连接时长</span>',
+                },
+                {
+                    field: 'is_online',
+                    title: '<span>是否在线</span>',
+                    formatter: function (value, row, index)  {
+                        let online = `<svg t="1642771230561" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="10567" width="50" height="50"><path d="M936.3456 43.04896H87.69536c-44.6464 0-80.85504 38.01088-80.85504 84.82816v532.02944c0 46.8992 36.20864 84.86912 80.85504 84.86912h288.03072v97.97632H318.6688v64.26624h-73.728v82.78016h534.1184v-82.78016h-73.64608v-64.26624h-57.09824v-97.97632h288.03072c44.6464 0 80.85504-38.01088 80.85504-84.86912V127.87712c0-46.81728-36.20864-84.82816-80.85504-84.82816z m-7.53664 615.8336H95.232V128.94208h833.57696v529.94048z" fill="#1afa29" p-id="10568"></path><path d="M715.3664 268.0832l-54.39488-54.39488-198.16448 198.16448L363.1104 312.1152 308.71552 366.51008l154.91072 154.91072 54.35392-54.35392-0.8192-0.86016z" fill="#1afa29" p-id="10569"></path></svg>`
+                        let offline = `<svg t="1642771309021" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="11437" width="50" height="50"><path d="M932.90496 68.11648H84.25472c-44.6464 0-80.85504 38.01088-80.85504 84.82816v532.02944c0 46.8992 36.20864 84.86912 80.85504 84.86912h288.03072v97.97632H315.22816v64.26624h-73.728v82.78016h534.07744v-82.78016h-73.64608v-64.26624h-57.09824v-97.97632h288.03072c44.6464 0 80.85504-38.01088 80.85504-84.86912V152.94464c0.04096-46.81728-36.16768-84.82816-80.81408-84.82816z m-7.53664 615.8336H91.79136V154.05056h833.57696v529.89952z" fill="#535308" p-id="11438"></path><path d="M670.80192 282.58304l-53.61664-54.31296-108.58496 110.05952-108.62592-110.05952-53.61664 54.31296 108.62592 110.05952-108.62592 110.10048L399.9744 557.056l108.62592-110.05952 108.58496 110.05952 53.61664-54.31296-108.62592-110.10048z" fill="#535308" p-id="11439"></path></svg>`
+                        return value ? online: offline
+                    }
+                },
+                {
+                    field: 'size',
+                    title: '<span>传输数据大小</span>',
+                },
+            ]
+        });
     }
 
     function load() {
         $('#client_connect_info').bootstrapTable({
-            url: '/api/client/status/',
+            url: '/api/clients/',
             method: 'get',
             striped: true,
             cache: false,
@@ -258,46 +285,40 @@
                     title: '<span>客户端id</span>'
                 },
                 {
-                    field: 'id',
-                    title: '<span>矿工连接id</span>'
+                    field: 'remote_address',
+                    title: '<span>客户端ip</span>'
                 },
                 {
-                    field: 'ip',
-                    title: '<span>ip</span>',
+                    field: 'pool',
+                    title: '<span>矿池地址</span>'
                 },
                 {
-                    field: 'size',
-                    title: '<span>传输数据大小</span>'
-                },
-                {
-                    field: 'connect_duration',
-                    title: '<span>连接时长</span>'
-                },
-                {
-                    field: 'is_online',
-                    title: '<span>是否在线</span>',
-                    formatter: function (value, row, index) {
-                        if (row.client_id === "总计"){
-                            return ` - `
+                    field: 'miners',
+                    title: '<span>矿工数量</span>',
+                    formatter: function (value, row, index)  {
+                        CLIENT_DATA[row.client_id] = row
+                        if (value === null){
+                            return "没有任何矿工使用该客户端"
                         }
-                        let online = `<svg t="1642771230561" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="10567" width="50" height="50"><path d="M936.3456 43.04896H87.69536c-44.6464 0-80.85504 38.01088-80.85504 84.82816v532.02944c0 46.8992 36.20864 84.86912 80.85504 84.86912h288.03072v97.97632H318.6688v64.26624h-73.728v82.78016h534.1184v-82.78016h-73.64608v-64.26624h-57.09824v-97.97632h288.03072c44.6464 0 80.85504-38.01088 80.85504-84.86912V127.87712c0-46.81728-36.20864-84.82816-80.85504-84.82816z m-7.53664 615.8336H95.232V128.94208h833.57696v529.94048z" fill="#1afa29" p-id="10568"></path><path d="M715.3664 268.0832l-54.39488-54.39488-198.16448 198.16448L363.1104 312.1152 308.71552 366.51008l154.91072 154.91072 54.35392-54.35392-0.8192-0.86016z" fill="#1afa29" p-id="10569"></path></svg>`
-                        let offline = `<svg t="1642771309021" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="11437" width="50" height="50"><path d="M932.90496 68.11648H84.25472c-44.6464 0-80.85504 38.01088-80.85504 84.82816v532.02944c0 46.8992 36.20864 84.86912 80.85504 84.86912h288.03072v97.97632H315.22816v64.26624h-73.728v82.78016h534.07744v-82.78016h-73.64608v-64.26624h-57.09824v-97.97632h288.03072c44.6464 0 80.85504-38.01088 80.85504-84.86912V152.94464c0.04096-46.81728-36.16768-84.82816-80.81408-84.82816z m-7.53664 615.8336H91.79136V154.05056h833.57696v529.89952z" fill="#535308" p-id="11438"></path><path d="M670.80192 282.58304l-53.61664-54.31296-108.58496 110.05952-108.62592-110.05952-53.61664 54.31296 108.62592 110.05952-108.62592 110.10048L399.9744 557.056l108.62592-110.05952 108.58496 110.05952 53.61664-54.31296-108.62592-110.10048z" fill="#535308" p-id="11439"></path></svg>`
-                        return value ? online: offline
-                    },
-
+                        return `<a style="color: blue;cursor:pointer" onclick="show_client_miners('${row.client_id}')">总计 ${value.length} 个矿工使用该客户端</a>`
+                    }
+                },
+                {
+                    field: 'online_time',
+                    title: '<span>在线时长</span>',
+                },
+                {
+                    field: 'data_size',
+                    title: '<span>传输数据大小</span>'
                 },
                 {
                     field: 'delay',
                     title: '<span >客户端-服务端延迟</span>',
                 },
                 {
-                    field: 'remote_addr',
-                    title: '<span >矿池连接</span>',
-                },
-                {
-                    field: 'hash_rate',
-                    title: '<span >预估算力</span>',
-                },
+                    field: '',
+                    title: '<span >操作</span>',
+                }
             ]
         });
     }

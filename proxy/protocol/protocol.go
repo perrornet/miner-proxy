@@ -6,25 +6,28 @@ import (
 	"miner-proxy/pkg"
 	"net"
 
-	"github.com/jmcvetta/randutil"
 	"github.com/panjf2000/gnet"
-	"github.com/segmentio/ksuid"
 	"github.com/smallnest/goframe"
 	"github.com/vmihailenco/msgpack/v5"
+	"go.uber.org/atomic"
 )
 
 type RequestType int
 
 const (
 	LOGIN RequestType = iota
-	REGISTER
 	INIT
 	DATA
 	PING
 	PONG
+	ACK
 	ERROR
 	// CLOSE 关闭矿机的连接
 	CLOSE
+)
+
+var (
+	confusionCount = atomic.NewInt64(1)
 )
 
 func (r RequestType) String() string {
@@ -41,10 +44,10 @@ func (r RequestType) String() string {
 		return "ping"
 	case PONG:
 		return "pong"
-	case REGISTER:
-		return "register"
 	case INIT:
-		return "register"
+		return "init"
+	case ACK:
+		return "ack"
 	}
 	return ""
 }
@@ -75,13 +78,16 @@ func (p *EncryptionProtocol) separateConfusionData(data []byte) []byte {
 // buildConfusionData 构建混淆数据
 // 从 10 - 135中随机一个数字作为本次随机数据的长度 N
 // 循环 N 次, 每次从 1 - 255 中随机一个数字作为本次随机数据
-// 最后在头部加入 proxyConfusionStart 尾部加入 proxyConfusionStart
 func (p *EncryptionProtocol) buildConfusionData() []byte {
-	number, _ := randutil.IntRange(10, 135)
+	count := int(confusionCount.Inc())
+	number := count % 356
+	if number < 10 {
+		number = 10
+	}
 	var data = make([]byte, number)
 	for i := 0; i < number; i++ {
-		index, _ := randutil.IntRange(1, 255)
-		data[i] = uint8(index)
+		count = int(confusionCount.Inc())
+		data[i] = uint8((count % 254) + 1)
 	}
 	return data
 }
@@ -121,27 +127,19 @@ func (cc *EncryptionProtocol) DecryptData(data []byte) (result []byte, err error
 }
 
 type Request struct {
-	Seq      int64       `msgpack:"seq"`
-	MsgId    string      `msgpack:"msgpack"`
 	ClientId string      `msgpack:"client_id"`
 	MinerId  string      `msgpack:"miner_id"`
+	Hash     string      `msgpack:"hash"`
 	Type     RequestType `msgpack:"type"`
 	Data     []byte      `msgpack:"data"`
 }
 
-func CopyRequest(req Request, seq int64) Request {
+func CopyRequest(req Request) Request {
 	return Request{
-		MsgId:    req.MsgId,
 		ClientId: req.ClientId,
 		MinerId:  req.MinerId,
 		Type:     req.Type,
-		Seq:      seq,
 	}
-}
-
-func (r *Request) SetMsId(msgId string) *Request {
-	r.MsgId = msgId
-	return r
 }
 
 func (r *Request) SetClientId(clientId string) *Request {
@@ -165,14 +163,11 @@ func (r *Request) SetType(Type RequestType) *Request {
 }
 
 func (r *Request) End() Request {
-	if r.MsgId == "" {
-		r.MsgId = ksuid.New().String()
-	}
 	return *r
 }
 
 func (r Request) String() string {
-	return fmt.Sprintf("seq=%d,msg=%s,miner_id=%s,type=%s,data_size=%d", r.Seq, r.MsgId, r.MinerId, r.Type, len(r.Data))
+	return fmt.Sprintf("clientId=%s,hash=%s,miner_id=%s,type=%s,data_size=%d", r.ClientId, r.Hash, r.MinerId, r.Type, len(r.Data))
 }
 
 type LoginRequest struct {
@@ -183,10 +178,18 @@ type LoginRequest struct {
 func Encode2Request(data []byte) (Request, error) {
 	var result = new(Request)
 	err := msgpack.Unmarshal(data, result)
+	if err != nil {
+		return *result, err
+	}
+	want := pkg.Crc32IEEEString(result.Data)
+	if result.Hash != want && result.Hash != "" {
+		return Request{}, fmt.Errorf("data hash must equal, got=%s want=%s", result.Hash, want)
+	}
 	return *result, err
 }
 
 func Decode2Byte(req Request) ([]byte, error) {
+	req.Hash = pkg.Crc32IEEEString(req.Data)
 	return msgpack.Marshal(req)
 }
 
@@ -228,6 +231,7 @@ func NewGoframeProtocol(secretKey string, useSendConfusionData bool, c net.Conn)
 		},
 	}
 }
+
 func (g *GoframeProtocol) ReadFrame() ([]byte, error) {
 	data, err := g.frame.ReadFrame()
 	if err != nil {
@@ -236,7 +240,6 @@ func (g *GoframeProtocol) ReadFrame() ([]byte, error) {
 	return g.DecryptData(data)
 }
 
-// Writes a "frame" to the connection.
 func (g *GoframeProtocol) WriteFrame(p []byte) error {
 	p, err := g.EncryptionData(p)
 	if err != nil {
@@ -245,12 +248,10 @@ func (g *GoframeProtocol) WriteFrame(p []byte) error {
 	return g.frame.WriteFrame(p)
 }
 
-// Closes the connections, truncates any buffers.
 func (g *GoframeProtocol) Close() error {
 	return g.frame.Close()
 }
 
-// Returns the underlying connection.
 func (g *GoframeProtocol) Conn() net.Conn {
 	return g.frame.Conn()
 }

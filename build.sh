@@ -1,18 +1,10 @@
 goVersion=$(go version)
 gitHash=$(git show -s --format=%H)
 buildTime=$(git show -s --format=%cd) 
-gitCommit=$(git show -s --format=%s) 
+gitCommit=$(git show -s --format=%s)
 cd ./cmd/miner-proxy/
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_darwin_amd64 .
-CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_freebsd_amd64 .
-CGO_ENABLED=0 GOOS=freebsd GOARCH=arm   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_freebsd_arm .
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_amd64 .
 CGO_ENABLED=0 GOOS=linux GOARCH=arm   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_arm .
-CGO_ENABLED=0 GOOS=linux GOARCH=mips   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_mips .
-CGO_ENABLED=0 GOOS=linux GOARCH=mips64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_mips64 .
-CGO_ENABLED=0 GOOS=linux GOARCH=mips64le   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_mips64le .
-CGO_ENABLED=0 GOOS=linux GOARCH=mipsle   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_linux_mipsle .
-CGO_ENABLED=0 GOOS=netbsd GOARCH=amd64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_netbsd_amd64 .
-CGO_ENABLED=0 GOOS=netbsd GOARCH=arm   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_netbsd_arm .
-CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64   go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_openbsd_amd64 .
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64  go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_windows_amd64.exe .
+CGO_ENABLED=0 GOOS=windows GOARCH=arm  go build -a -ldflags "-s -w -extldflags '-static' -X 'main.goVersion=${goVersion}'  -X 'main.gitHash=${gitHash}'  -X 'main.buildTime=${buildTime}' -X 'main.gitCommit=${gitCommit}'" -o ../../miner-proxy_windows_amd64.exe .

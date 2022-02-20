@@ -11,18 +11,13 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/liushuochen/gotable"
-	"github.com/panjf2000/gnet"
 	"github.com/spf13/cast"
 	"github.com/wxpusher/wxpusher-sdk-go/model"
-	"go.uber.org/atomic"
 )
 
 var (
-	startTime       = time.Now()
-	pushers         sync.Map
-	m               sync.Mutex
-	TOTALSIZE       = atomic.NewInt64(0)
-	clientDelayZero sync.Map
+	pushers sync.Map
+	m       sync.Mutex
 )
 
 type ClientSize struct {
@@ -50,79 +45,29 @@ func init() {
 }
 
 func Show(offlineTime time.Duration) {
-	table, _ := gotable.Create("客户端id", "矿工id", "Ip", "传输数据大小", "连接时长", "是否在线", "客户端-服务端延迟", "矿池连接", "预估算力(仅通过流量大小判断)")
-	var result []map[string]string
-	var (
-		totalHashRate float64
-		onlineCount   int64
-	)
 	var offlineClient = hashset.New()
-	clients.Range(func(key, value interface{}) bool {
-		client := value.(*Client)
-		v, ok := clientDelay.Load(client.clientId)
-		var delay = "-"
-		if ok && !v.(*Delay).endTime.IsZero() && !v.(*Delay).startTime.IsZero() {
-			startTime := v.(*Delay).startTime
-			endTime := v.(*Delay).endTime
-			if endTime.Sub(startTime).Seconds() > 0 {
-				delay = endTime.Sub(startTime).String()
+	table, _ := gotable.Create("客户端id", "矿工id", "Ip", "传输数据大小", "连接时长", "是否在线", "客户端-服务端延迟", "矿池连接", "预估算力(仅通过流量大小判断)")
+	for _, v := range ClientInfo() {
+		for _, v1 := range v.Miners {
+			if !v1.IsOnline && !v1.stopTime.IsZero() && time.Since(v1.stopTime).Seconds() >= offlineTime.Seconds() {
+				offlineClient.Add(fmt.Sprintf("ip: %s; 池: %s; 停止时间: %s", v1.Ip, v1.Pool, v1.StopTime))
+				clients.Delete(v1.Id)
 			}
-
+			_ = table.AddRow(map[string]string{
+				"客户端id":     v.ClientId,
+				"矿工id":      v1.Id,
+				"Ip":        v1.Ip,
+				"传输数据大小":    v1.Size,
+				"连接时长":      v1.ConnTime,
+				"矿池连接":      v1.Pool,
+				"是否在线":      cast.ToString(v1.IsOnline),
+				"客户端-服务端延迟": v.Delay,
+			})
 		}
-		if !client.stopTime.IsZero() && time.Since(client.stopTime).Seconds() >= offlineTime.Seconds() {
-			if client.dataSize.Load() >= 1024 {
-				offlineClient.Add(fmt.Sprintf("ip: %s; id: %s", client.ip, client.id))
-			}
-			// 删除数据
-			clients.Delete(key)
-		} else {
-			onlineCount++
-			if delay == "-" {
-				var delayZeroCount = 1
-				v, _ := clientDelayZero.Load(client.clientId)
-				delayZeroCount += cast.ToInt(v)
-				clientDelayZero.Store(client.clientId, delayZeroCount)
-				if delayZeroCount >= 5 {
-					client.Close()
-				}
-			}
-		}
-
-		hashRate := pkg.GetHashRateBySize(client.dataSize.Load(), time.Since(client.startTime))
-		result = append(result, map[string]string{
-			"客户端id":     client.clientId,
-			"矿工id":      client.id,
-			"Ip":        client.ip,
-			"传输数据大小":    humanize.Bytes(uint64(client.dataSize.Load())),
-			"连接时长":      time.Since(client.startTime).String(),
-			"矿池连接":      client.pool.Address(),
-			"是否在线":      cast.ToString(client.stopTime.IsZero()),
-			"客户端-服务端延迟": delay,
-			"预估算力(仅通过流量大小判断)": pkg.GetHumanizeHashRateBySize(hashRate),
-		})
-		totalHashRate += hashRate
-		return true
-	})
-
-	result = append(result, map[string]string{
-		"客户端id":     "总计",
-		"Ip":        "-",
-		"传输数据大小":    humanize.Bytes(uint64(TOTALSIZE.Load())),
-		"连接时长":      time.Since(startTime).String(),
-		"矿池连接":      " - ",
-		"是否在线":      cast.ToString(onlineCount),
-		"客户端-服务端延迟": " - ",
-		"预估算力(仅通过流量大小判断)": pkg.GetHumanizeHashRateBySize(totalHashRate),
-	})
-
-	table.AddRows(result)
+	}
 	fmt.Println(table.String())
 	if offlineClient.Size() != 0 { // 发送掉线通知
-		var offlineClients []string
-		for _, v := range offlineClient.Values() {
-			offlineClients = append(offlineClients, cast.ToString(v))
-		}
-		SendOfflineIps(offlineClients)
+		SendOfflineIps(pkg.Interface2Strings(offlineClient.Values()))
 	}
 }
 
@@ -192,10 +137,6 @@ func SendOfflineIps(offlineIps []string) {
 	})
 }
 
-func ClearTotalSize() {
-	TOTALSIZE.Store(0)
-}
-
 type ClientStatus struct {
 	Id              string `json:"id"`
 	ClientId        string `json:"client_id"`
@@ -226,66 +167,120 @@ func (c ClientStatusArray) Swap(i, j int) {
 
 }
 
-func GetClientStatus() (result ClientStatusArray) {
-	var (
-		totalHashRate float64
-		onlineCount   int64
-	)
+type ClientRemoteAddr struct {
+	Delay         string `json:"delay"`
+	ClientId      string `json:"client_id"`
+	ConnSize      int    `json:"conn_size"`
+	dataSize      int64
+	DataSize      string  `json:"data_size"`
+	RemoteAddr    string  `json:"remote_address"`
+	Pool          string  `json:"pool"`
+	SendDataCount int     `json:"send_data_count"`
+	Miners        []Miner `json:"miners"`
+	OnlineTime    string  `json:"online_time"`
+}
+
+type Miner struct {
+	dataSize int64
+	Id       string `json:"id"`
+	Ip       string `json:"ip"`
+	ConnTime string `json:"conn_time"`
+	Pool     string `json:"pool"`
+	Size     string `json:"size"`
+	StopTime string `json:"stop_time"`
+	stopTime time.Time
+	IsOnline bool `json:"is_online"`
+}
+
+type ClientRemoteAddrs []*ClientRemoteAddr
+
+func (c ClientRemoteAddrs) Len() int {
+	return len(c)
+}
+
+func (c ClientRemoteAddrs) Less(i, j int) bool {
+	var iTotal int
+	var jTotal int
+	iTotal += c[i].ConnSize + len(c[i].Miners) + int(c[i].dataSize)
+	jTotal += c[j].ConnSize + len(c[j].Miners) + int(c[j].dataSize)
+
+	return iTotal > jTotal
+}
+
+// Swap swaps the elements with indexes i and j.
+func (c ClientRemoteAddrs) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+
+}
+
+func ClientInfo() []*ClientRemoteAddr {
+	var clientMap = make(map[string][]Miner)
+	var clientPools = make(map[string]*hashset.Set)
+	var clientSizeMap = make(map[string]int64)
+	var existIpMiner = make(map[string]struct{})
 	clients.Range(func(key, value interface{}) bool {
-		client := value.(*Client)
-		v, ok := clientDelay.Load(client.clientId)
-		var delay = "-"
-		if ok {
-			delay = v.(*Delay).endTime.Sub(v.(*Delay).startTime).String()
+		c := value.(*Client)
+		if _, ok := clientPools[c.clientId]; !ok {
+			clientPools[c.clientId] = hashset.New()
 		}
-		if client.stopTime.IsZero() {
-			onlineCount++
+		if _, ok := existIpMiner[c.ip]; ok && c.closed.Load() {
+			pkg.Debug("删除旧的miner连接, 使用新的miner连接")
+			clients.Delete(key)
+			return true
+		}
+		clientPools[c.clientId].Add(c.address)
+		m := &Miner{
+			Id:       c.id,
+			Ip:       c.ip,
+			Pool:     c.pool.Address(),
+			ConnTime: time.Since(c.startTime).String(),
+			Size:     humanize.Bytes(uint64(c.dataSize.Load())),
+			IsOnline: !c.closed.Load(),
+		}
+		if !m.IsOnline && !c.stopTime.IsZero() {
+			m.StopTime = time.Since(c.stopTime).String()
+			m.stopTime = c.stopTime
+		}
+		if m.IsOnline {
+			existIpMiner[c.ip] = struct{}{}
+		}
+		clientSizeMap[c.clientId] += c.dataSize.Load()
+		clientMap[c.clientId] = append(clientMap[c.clientId], *m)
+		return true
+	})
+
+	var result ClientRemoteAddrs
+	conns.Range(func(key, value interface{}) bool {
+		cd := value.(*ClientDispatch)
+		c := &ClientRemoteAddr{
+			ClientId:   cast.ToString(key),
+			ConnSize:   cd.ConnCount(),
+			Pool:       cd.pool,
+			OnlineTime: time.Since(cd.startTime).String(),
+			RemoteAddr: cd.remoteAddr,
+		}
+		if _, ok := clientMap[cast.ToString(key)]; ok {
+			c.Miners = clientMap[cast.ToString(key)]
+			c.dataSize = clientSizeMap[cast.ToString(key)]
+			c.DataSize = humanize.Bytes(uint64(clientSizeMap[cast.ToString(key)]))
+			c.Pool = strings.Join(pkg.Interface2Strings(clientPools[cast.ToString(key)].Values()), ",")
+		}
+		v, _ := connDelay.Load(c.ClientId)
+		if v == nil {
+			v = Delay{}
 		}
 
-		hashRate := pkg.GetHashRateBySize(client.dataSize.Load(), time.Since(client.startTime))
-		result = append(result, ClientStatus{
-			Id:              client.id,
-			ClientId:        client.clientId,
-			Ip:              client.ip,
-			Size:            humanize.Bytes(uint64(client.dataSize.Load())),
-			ConnectDuration: time.Since(client.startTime).String(),
-			RemoteAddr:      client.pool.Address(),
-			IsOnline:        client.stopTime.IsZero(),
-			HashRate:        pkg.GetHumanizeHashRateBySize(hashRate),
-			Delay:           delay,
-		})
-		totalHashRate += hashRate
+		d := v.(Delay)
+		c.Delay = "等待检测"
+		if d.delay.Seconds() <= 120 {
+			c.Delay = d.delay.String()
+		}
+
+		result = append(result, c)
+
 		return true
 	})
 
 	sort.Sort(result)
-	result = append(result, ClientStatus{
-		Id:              "-",
-		ClientId:        "总计",
-		Ip:              "-",
-		Size:            humanize.Bytes(uint64(TOTALSIZE.Load())),
-		ConnectDuration: time.Since(startTime).String(),
-		RemoteAddr:      "-",
-		HashRate:        pkg.GetHumanizeHashRateBySize(totalHashRate),
-		Delay:           "-",
-	})
-	return
-}
-
-type ClientRemoteAddr struct {
-	ClientId   string `json:"client_id"`
-	RemoteAddr string `json:"remote_address"`
-}
-
-func ClientInfo() map[string][]string {
-	var clientIds = make(map[string][]string)
-	clientConn.Range(func(key, value interface{}) bool {
-		k := strings.Split(cast.ToString(key), "-")[0]
-		clientIds[k] = append(clientIds[k], value.(gnet.Conn).RemoteAddr().String())
-		return true
-	})
-	for k := range clientIds {
-		sort.Strings(clientIds[k])
-	}
-	return clientIds
+	return result
 }

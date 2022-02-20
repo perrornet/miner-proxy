@@ -1,14 +1,14 @@
 package pkg
 
 import (
-	"crypto/md5"
 	"errors"
 	"fmt"
+	"hash/crc32"
+	"strconv"
+	"strings"
 	"time"
-)
 
-var (
-	CLIENTID string
+	"github.com/spf13/cast"
 )
 
 func Try(f func() bool, maxTry int) error {
@@ -38,6 +38,33 @@ func GetHumanizeHashRateBySize(hashRate float64) string {
 	return result
 }
 
-func Md5(text string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(text)))
+func String2Array(text string, seq string) []string {
+	var result []string
+	for _, v := range strings.Split(text, seq) {
+		if v == "" {
+			continue
+		}
+		result = append(result, v)
+	}
+	return result
+}
+
+func Interface2Strings(arr []interface{}) []string {
+	var result []string
+	for _, v := range arr {
+		result = append(result, cast.ToString(v))
+	}
+	return result
+}
+
+func Crc32IEEE(data []byte) uint32 {
+	return crc32.ChecksumIEEE(data)
+}
+
+func Crc32IEEEString(data []byte) string {
+	return strconv.Itoa(int(Crc32IEEE(data)))
+}
+
+func Crc32IEEEStr(data string) string {
+	return Crc32IEEEString([]byte(data))
 }

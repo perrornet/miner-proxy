@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/segmentio/ksuid"
-	"github.com/spf13/cast"
 )
 
 var (
@@ -21,34 +20,48 @@ var (
 )
 
 type ZipParams struct {
-	ClientSystemType   string `json:"client_system_type"`
-	ClientSystemStruct string `json:"client_system_struct"`
-	ClientRunType      string `json:"client_run_type"`
-	ClientListenPort   string `json:"client_listen_port"`
-	ClientPool         string `json:"client_pool"`
+	ClientSystemType   string    `json:"client_system_type"`
+	ClientSystemStruct string    `json:"client_system_struct"`
+	ClientRunType      string    `json:"client_run_type"`
+	Forward            []Forward `json:"forward"`
+}
+
+type Forward struct {
+	Port string `json:"port"`
+	Pool string `json:"pool"`
 }
 
 func (z ZipParams) ID() string {
-	name := pkg.Md5(fmt.Sprintf("%s-%s-%s-%s-%s",
-		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, z.ClientListenPort, z.ClientPool))[:10]
-	return pkg.CLIENTID + name
+	var ports []string
+	for _, v := range z.Forward {
+		ports = append(ports, v.Port, v.Pool)
+	}
+	name := pkg.Crc32IEEEStr(fmt.Sprintf("%s-%s-%s-%s",
+		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, strings.Join(ports, ",")))[:10]
+	return name
 }
 
 func (z ZipParams) build(filename, secretKey, serverPort, serverHost string) []byte {
 	var args []string
 
 	if strings.ToLower(z.ClientSystemType) == "windows" { // bat
-		args = append(args, fmt.Sprintf(".\\%s", filename))
+		filename = fmt.Sprintf(".\\%s", filename)
 	} else {
-		args = append(args, fmt.Sprintf("./%s", filename))
+		filename = fmt.Sprintf("./%s", filename)
+	}
+	args = append(args, filename)
+	args = append(args, "-k", secretKey,
+		"-r", fmt.Sprintf("%s:%s", serverHost, serverPort))
+
+	var port []string
+	var pool []string
+	for _, v := range z.Forward {
+		port = append(port, fmt.Sprintf(":%s", v.Port))
+		pool = append(pool, v.Pool)
 	}
 
-	args = append(args, "--key", secretKey,
-		"-r", fmt.Sprintf("%s:%s", serverHost, serverPort))
-	if z.ClientPool != "" {
-		args = append(args, "--pool", z.ClientPool)
-	}
-	args = append(args, "-l", fmt.Sprintf(":%s", z.ClientListenPort), "--client")
+	args = append(args, "-l", strings.Join(port, ","), "-c")
+	args = append(args, "-u", strings.Join(pool, ","))
 
 	switch strings.ToLower(z.ClientRunType) {
 	case "service":
@@ -57,33 +70,36 @@ func (z ZipParams) build(filename, secretKey, serverPort, serverHost string) []b
 			args = []string{
 				fmt.Sprintf("%s\npause", strings.Join(args, " ")),
 			}
+		} else {
+			args = []string{fmt.Sprintf("sudo su\nchmod +x %s\n%s", fmt.Sprintf("%s", filename), strings.Join(args, " "))}
 		}
 	case "backend":
 		if strings.ToLower(z.ClientSystemType) == "windows" { // bat
-			args = append([]string{"start", "/b"}, args...)
+			cmd := "@echo off\nif \"%1\"==\"h\" goto begin\n\nstart mshta vbscript:createobject(\"wscript.shell\").run(\"\"\"%~nx0\"\" h\",0)(window.close)&&exit\n\n:begin"
+
 			args = []string{
-				fmt.Sprintf(`%s\npause`, strings.Join(args, " ")),
+				fmt.Sprintf("%s\n\n%s", cmd, strings.Join(args, " ")),
 			}
 		} else {
-			args = append([]string{"nohup"}, args...)
-			args = append(args, ">>", "../miner-proxy.log", "2>&", "1&")
+			args = []string{
+				fmt.Sprintf("sudo su\nchmod +x %s\nnohup %s > ./miner-proxy.log 2>& 1&", filename, strings.Join(args, " ")),
+			}
 		}
 	case "frontend":
 		if strings.ToLower(z.ClientSystemType) == "windows" { // bat
 			args = []string{
-				fmt.Sprintf(`@cd /d "*%~dp0"\n%s\npause`, strings.Join(args, " ")),
+				fmt.Sprintf("%s\npause", strings.Join(args, " ")),
 			}
+		} else {
+			args = []string{fmt.Sprintf("sudo su\nchmod +x %s\n%s", filename, strings.Join(args, " "))}
 		}
 	}
 	return []byte(strings.Join(args, " "))
 }
 
 func (z ZipParams) Check() error {
-	if z.ClientSystemType == "" || z.ClientSystemStruct == "" || z.ClientRunType == "" || z.ClientListenPort == "" {
+	if z.ClientSystemType == "" || z.ClientSystemStruct == "" || z.ClientRunType == "" || len(z.Forward) == 0 {
 		return fmt.Errorf("参数错误")
-	}
-	if cast.ToInt(z.ClientListenPort) <= 0 {
-		return fmt.Errorf("客户端端口错误")
 	}
 	return nil
 }
@@ -98,7 +114,18 @@ func PackScriptFile(c *gin.Context) {
 	currentDir := ksuid.New().String()
 	dir := filepath.Join(BASEDIR, currentDir)
 	// build download url
-	u := "https://github.abskoop.workers.dev/https://github.com/PerrorOne/miner-proxy/releases/download/" + c.GetString("tag")
+
+	u := "https://github.com/PerrorOne/miner-proxy/releases/download/" + c.GetString("tag")
+	if dgu := c.GetString("download_github_url"); dgu != "" {
+		if !strings.HasSuffix(dgu, "/") {
+			dgu = dgu + "/"
+		}
+
+		if !strings.HasPrefix(dgu, "http") {
+			u = fmt.Sprintf("%s%s", dgu, u)
+		}
+	}
+
 	filename := fmt.Sprintf("miner-proxy_%s_%s", args.ClientSystemType, args.ClientSystemStruct)
 	if err := os.MkdirAll(dir, 0666); err != nil {
 		c.JSON(200, gin.H{"code": 500, "msg": fmt.Sprintf("创建临时文件失败: %s", err)})
@@ -114,22 +141,23 @@ func PackScriptFile(c *gin.Context) {
 			c.JSON(200, gin.H{"code": 500, "msg": fmt.Sprintf("从github中下载脚本失败: %s", err)})
 			return
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
 			c.JSON(200, gin.H{"code": 500, "msg": fmt.Sprintf("没有在 %s 中发现任何脚本内容, 请检查您的设置是否有问题", fmt.Sprintf("%s/%s", u, filename))})
 			return
 		}
-		defer resp.Body.Close()
+
 		f, err := os.OpenFile(filepath.Join(dir, filename), os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			c.JSON(200, gin.H{"code": 500, "msg": fmt.Sprintf("创建临时文件失败: %s", err)})
 			return
 		}
 		if _, err := io.Copy(f, resp.Body); err != nil {
-			f.Close()
+			_ = f.Close()
 			c.JSON(200, gin.H{"code": 500, "msg": fmt.Sprintf("创建临时文件失败: %s", err)})
 			return
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	// 构建文件
 	data := args.build(filename, strings.TrimRight(c.GetString("secretKey"), "0"), c.GetString("server_port"), strings.Split(c.Request.Host, ":")[0])

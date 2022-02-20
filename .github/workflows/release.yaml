@@ -17,24 +17,18 @@ jobs:
         with:
           version: latest
           files: |
-            ./bin/*.exe
+            ./miner-proxy_windows_amd64.exe
+            ./miner-proxy_windows_arm.exe
+            ./miner-proxy_darwin_amd64
           args: -fq
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             miner-proxy_darwin_amd64
-            miner-proxy_freebsd_amd64
-            miner-proxy_freebsd_arm
             miner-proxy_linux_amd64
             miner-proxy_linux_arm
-            miner-proxy_linux_mips
-            miner-proxy_linux_mips64
-            miner-proxy_linux_mips64le
-            miner-proxy_linux_mipsle
-            miner-proxy_netbsd_amd64
-            miner-proxy_netbsd_arm
-            miner-proxy_openbsd_amd64
             miner-proxy_windows_amd64.exe
+            miner-proxy_windows_arm.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

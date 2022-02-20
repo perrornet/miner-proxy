@@ -10,26 +10,11 @@ import (
 )
 
 var (
-	_log    *zap.Logger
-	logFunc map[zapcore.Level]func(template string, args ...interface{})
+	_log *zap.SugaredLogger
 )
 
 type GormLog struct {
 	l *zap.SugaredLogger
-}
-
-func initOutFunc() {
-	if len(logFunc) == 0 {
-		logFunc = map[zapcore.Level]func(template string, args ...interface{}){
-			zapcore.DebugLevel:  _log.Sugar().Debugf,
-			zapcore.InfoLevel:   _log.Sugar().Infof,
-			zapcore.WarnLevel:   _log.Sugar().Warnf,
-			zapcore.ErrorLevel:  _log.Sugar().Errorf,
-			zapcore.FatalLevel:  _log.Sugar().Fatalf,
-			zapcore.PanicLevel:  _log.Sugar().Panicf,
-			zapcore.DPanicLevel: _log.Sugar().DPanicf,
-		}
-	}
 }
 
 func InitLog(level zapcore.Level, logfile string, syncs ...io.Writer) {
@@ -62,6 +47,7 @@ func InitLog(level zapcore.Level, logfile string, syncs ...io.Writer) {
 	for _, v := range syncs {
 		ws = append(ws, zapcore.AddSync(v))
 	}
+
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(*encoderConfig),
 		zapcore.NewMultiWriteSyncer(ws...), atomicLevel)
 
@@ -69,22 +55,32 @@ func InitLog(level zapcore.Level, logfile string, syncs ...io.Writer) {
 	if level <= zap.DebugLevel {
 		options = append(options, zap.AddCaller())
 	}
-	_log = zap.New(core, options...)
-	initOutFunc()
+	_log = zap.New(core, options...).Sugar()
 }
 
 func outByLog(level zapcore.Level, msg string, v ...interface{}) {
 	if _log == nil {
 		InitLog(zap.DebugLevel, "")
-		initOutFunc()
 		_log.Warn("log not init, auto init log level debug")
 	}
+	var out = _log.Debugf
 
-	var out = _log.Sugar().Debugf
-	if _, ok := logFunc[level]; ok {
-		out = logFunc[level]
+	switch level {
+	case zapcore.DebugLevel:
+		out = _log.Debugf
+	case zapcore.InfoLevel:
+		out = _log.Infof
+	case zapcore.WarnLevel:
+		out = _log.Warnf
+	case zapcore.ErrorLevel:
+		out = _log.Errorf
+	case zapcore.FatalLevel:
+		out = _log.Fatalf
+	case zapcore.PanicLevel:
+		out = _log.Panicf
+	case zapcore.DPanicLevel:
+		out = _log.DPanicf
 	}
-
 	out(msg, v...)
 }
 
@@ -108,14 +104,6 @@ func Panic(msg string, v ...interface{}) {
 	outByLog(zapcore.PanicLevel, msg, v...)
 }
 
-func DPanic(msg string, v ...interface{}) {
-	outByLog(zapcore.DPanicLevel, msg, v...)
-}
-
 func Fatal(msg string, v ...interface{}) {
 	outByLog(zapcore.FatalLevel, msg, v...)
-}
-
-func Log() *zap.Logger {
-	return _log
 }

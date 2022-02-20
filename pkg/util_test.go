@@ -15,7 +15,7 @@ func TestGetHashRateBySize(t *testing.T) {
 		args args
 		want float64
 	}{
-		{"1M", args{size: 1000, startTime: time.Second}, 850},
+		{"1M", args{size: 1000, startTime: time.Second}, 746.2686567164179},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

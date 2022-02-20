@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jmcvetta/randutil"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pkg/pool/goroutine"
 	"github.com/spf13/cast"
@@ -18,54 +17,16 @@ import (
 )
 
 var (
-	clients     sync.Map
-	clientConn  sync.Map
-	clientDelay sync.Map
-	p           = goroutine.Default()
+	clients   sync.Map
+	conns     sync.Map
+	connId2Id sync.Map
+	connDelay sync.Map
+	p         = goroutine.Default()
 )
 
 type Delay struct {
 	startTime time.Time
-	endTime   time.Time
 	delay     time.Duration
-}
-
-func getClientConn(clientId string) gnet.Conn {
-	var result []interface{}
-	clientConn.Range(func(key, value interface{}) bool {
-		k := cast.ToString(key)
-		if !strings.HasPrefix(k, clientId) {
-			return true
-		}
-		result = append(result, value)
-		return true
-	})
-	if len(result) == 0 {
-		return nil
-	}
-	index, _ := randutil.IntRange(0, len(result))
-	return result[index].(gnet.Conn)
-}
-
-func setClientConn(clientId string, c gnet.Conn) {
-	clientConn.Store(getClientConnKey(clientId, c), c)
-}
-
-func getClientConnKey(clientId string, c gnet.Conn) string {
-	return fmt.Sprintf("%s-%s", clientId, c.RemoteAddr().String())
-}
-
-func delClientConn(c gnet.Conn) {
-	ip := c.RemoteAddr().String()
-	clientConn.Range(func(key, value interface{}) bool {
-		k := cast.ToString(key)
-		if !strings.HasSuffix(k, ip) {
-			return true
-		}
-		clientConn.Delete(key)
-		clientDelay.Delete(key)
-		return false
-	})
 }
 
 type Server struct {
@@ -80,15 +41,46 @@ type Client struct {
 	input                     chan []byte
 	output                    chan []byte
 	closed                    *atomic.Bool
-	seq                       *atomic.Int64
 	stop                      sync.Once
 	startTime                 time.Time
 	dataSize                  *atomic.Int64
 	stopTime                  time.Time
+	ready                     *atomic.Bool
+	readyChan                 chan struct{}
 }
 
-func (c *Client) Init(req protocol.Request, _ gnet.Conn, defaultPoolAddress, clientId string) error {
+func (c *Client) SetReady() {
+	if c.ready.Load() {
+		return
+	}
+	pkg.Debug("设置 %s ready", c.id)
+	c.ready.Store(true)
+	c.readyChan <- struct{}{}
+}
+
+func (c *Client) SetWait() {
+	pkg.Debug("设置 %s wait", c.id)
+	c.ready.Store(false)
+}
+
+func (c *Client) Wait(timeout time.Duration) bool {
+	if c.ready.Load() {
+		return true
+	}
+	t := time.NewTicker(timeout)
+	defer t.Stop()
+	select {
+	case <-c.readyChan:
+		return true
+	case <-t.C:
+		return false
+	}
+}
+
+func (c *Client) Init(req protocol.Request, defaultPoolAddress, clientId string) error {
 	c.id = req.MinerId
+	c.ready = atomic.NewBool(true)
+	c.readyChan = make(chan struct{})
 	lr, err := protocol.Encode2LoginRequest(req.Data)
 	if err != nil {
 		return err
@@ -102,7 +94,6 @@ func (c *Client) Init(req protocol.Request, _ gnet.Conn, defaultPoolAddress, cli
 	c.input = make(chan []byte)
 	c.output = make(chan []byte)
 	c.startTime = time.Now()
-	c.seq = atomic.NewInt64(0)
 	c.stopTime = time.Time{}
 	c.dataSize = atomic.NewInt64(0)
 	c.closed = atomic.NewBool(false)
@@ -116,7 +107,6 @@ func (c *Client) Init(req protocol.Request, _ gnet.Conn, defaultPoolAddress, cli
 
 func (c *Client) Close() {
 	c.stop.Do(func() {
-
 		c.closed.Store(true)
 		if c.input != nil {
 			close(c.input)
@@ -132,60 +122,111 @@ func (c *Client) Close() {
 func NewServer(address, secretKey, PoolAddress string) error {
 	s := &Server{pool: p, PoolAddress: PoolAddress}
 	return gnet.Serve(s, "tcp://"+address,
-		gnet.WithMulticore(true),
+		gnet.WithReusePort(true),
+		gnet.WithReuseAddr(true),
 		gnet.WithCodec(protocol.NewProtocol(secretKey, true)),
 		gnet.WithTicker(true),
 	)
 }
 
 func (ps *Server) OnClosed(c gnet.Conn, _ error) (action gnet.Action) {
-	pkg.Debug("close connect %s", c.RemoteAddr().String())
-	delClientConn(c)
+	clientId, ok := connId2Id.Load(c.RemoteAddr().String())
+	if !ok {
+		return gnet.None
+	}
+	v, ok := conns.Load(clientId)
+	if !ok {
+		return gnet.None
+	}
+	cd := v.(*ClientDispatch)
+	cd.DelConn(ps.getConnId(cast.ToString(clientId), c))
+	if cd.ConnCount() == 0 {
+		conns.Delete(clientId)
+	}
+	connId2Id.Delete(c.RemoteAddr().String())
 	return gnet.None
 }
 
 func (ps *Server) Tick() (delay time.Duration, action gnet.Action) {
 	var exist = make(map[string]struct{})
-	clientConn.Range(func(key, value interface{}) bool {
-		c := value.(gnet.Conn)
-		req := new(protocol.Request).SetType(protocol.PING).
-			SetClientId(strings.Split(cast.ToString(key), "-")[0]).End()
-		data, _ := protocol.Decode2Byte(req)
-		if _, ok := exist[req.ClientId]; !ok {
-			clientDelay.Store(req.ClientId, &Delay{
-				startTime: time.Now(),
-				delay:     0,
-			})
-			exist[req.ClientId] = struct{}{}
-		}
-
-		if err := c.AsyncWrite(data); err != nil {
-			pkg.Warn("ping client failed %s", err)
-			delClientConn(c)
-			clientDelay.Delete(req.ClientId)
+	var clientMap = make(map[string][]string)
+	clients.Range(func(key, value interface{}) bool {
+		c := value.(*Client)
+		if c.closed.Load() {
 			return true
 		}
+		clientMap[c.clientId] = append(clientMap[c.clientId], cast.ToString(key))
 		return true
 	})
 
-	n, _ := randutil.IntRange(10, 60)
-	delay = time.Second * time.Duration(n)
+	connId2Id.Range(func(key, value interface{}) bool {
+		v, ok := conns.Load(cast.ToString(value))
+		if !ok {
+			return true
+		}
+		cd := v.(*ClientDispatch)
+		if cd.ConnCount() == 0 {
+			conns.Delete(value)
+			connId2Id.Delete(key)
+			return true
+		}
+		cd.conns.Range(func(key, value1 interface{}) bool {
+			req := new(protocol.Request).SetType(protocol.PING).
+				SetClientId(strings.Split(cast.ToString(key), "-")[0])
+			if _, ok := exist[cast.ToString(value)]; !ok {
+				v, _ := connDelay.Load(value)
+				if v == nil {
+					v = Delay{}
+				}
+				connDelay.Store(value, Delay{
+					startTime: time.Now(),
+					delay:     v.(Delay).delay,
+				})
+				if _, ok = clientMap[cast.ToString(value)]; ok {
+					req.SetData([]byte(strings.Join(clientMap[cast.ToString(value)], ",")))
+				}
+			}
+
+			data, _ := protocol.Decode2Byte(req.End())
+			if err := value1.(*Conn).Conn.AsyncWrite(data); err != nil {
+				cd.DelConn(cast.ToString(key))
+				return true
+			}
+			exist[cast.ToString(value)] = struct{}{}
+			return false
+		})
+		return true
+	})
+	delay = time.Second * 36000
 	return
 }
 
-func (ps *Server) SendToClient(req protocol.Request, maxTry int, client *Client) error {
+func (ps *Server) SendToClient(req protocol.Request, maxTry int, clientId, _ string) error {
 	return pkg.Try(func() bool {
-		conn := getClientConn(client.clientId)
-		if conn == nil {
+		v, ok := conns.Load(clientId)
+		if !ok {
+			time.Sleep(time.Second)
 			return false
 		}
-		data, _ := protocol.Decode2Byte(req.End())
-		_ = conn.AsyncWrite(data)
+		cd := v.(*ClientDispatch)
+
+		conn := cd.GetConn()
+		if conn == nil {
+			pkg.Warn("%s 没有可用的连接", clientId)
+			time.Sleep(time.Second)
+			return false
+		}
+		data, _ := protocol.Decode2Byte(req)
+		pkg.Debug("server -> client %s", req)
+		if err := conn.AsyncWrite(data); err != nil {
+			pkg.Warn("server data to client error: %v", err)
+			return false
+		}
 		return true
 	}, maxTry)
 }
 
-func (ps *Server) getOrCreateClient(req protocol.Request, ctx gnet.Conn) (*Client, error) {
+func (ps *Server) getOrCreateClient(req protocol.Request) (*Client, error) {
 	client, ok := clients.Load(req.MinerId)
 	if ok {
 		if !client.(*Client).closed.Load() {
@@ -196,7 +237,7 @@ func (ps *Server) getOrCreateClient(req protocol.Request, ctx gnet.Conn) (*Clien
 		return nil, errors.New("need login")
 	}
 	c := new(Client)
-	if err := c.Init(req, ctx, ps.PoolAddress, req.ClientId); err != nil {
+	if err := c.Init(req, ps.PoolAddress, req.ClientId); err != nil {
 		return nil, err
 	}
 	clients.Store(req.MinerId, c)
@@ -206,6 +247,10 @@ func (ps *Server) getOrCreateClient(req protocol.Request, ctx gnet.Conn) (*Clien
 		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
 		for !c.closed.Load() {
+			if !c.Wait(time.Second * 10) {
+				pkg.Warn("等待 client %s ack 超时", c.id)
+				return
+			}
 			select {
 			case data, ok := <-c.output:
 				if !ok {
@@ -213,19 +258,18 @@ func (ps *Server) getOrCreateClient(req protocol.Request, ctx gnet.Conn) (*Clien
 						ClientId: c.clientId,
 						MinerId:  c.id,
 						Type:     protocol.CLOSE,
-					}, 1, c)
+					}, 1, c.clientId, c.id)
 					return
 				}
 				req := protocol.Request{Type: protocol.DATA, MinerId: c.id, Data: data,
-					ClientId: c.clientId, Seq: c.seq.Add(1)}
-
-				data, _ = protocol.Decode2Byte(req.End())
-				if err := ps.SendToClient(req, 10, c); err != nil {
+					ClientId: c.clientId}
+				data, _ = protocol.Decode2Byte(req)
+				if err := ps.SendToClient(req, 10, c.clientId, c.id); err != nil {
 					pkg.Warn("try 10 times write to client failed")
 					return
 				}
+				c.SetWait()
 				c.dataSize.Add(int64(len(data)))
-				TOTALSIZE.Add(int64(len(data)))
 			case <-t.C:
 			}
 		}
@@ -246,31 +290,52 @@ func (ps *Server) getClient(MinerId string) (*Client, bool) {
 	return c, true
 }
 
-func (ps *Server) readPing(req protocol.Request, _ gnet.Conn) (out []byte, action gnet.Action) {
-	v, ok := clientDelay.Load(req.ClientId)
+func (ps *Server) ping(req protocol.Request, _ gnet.Conn) (out []byte, action gnet.Action) {
+	v, ok := connDelay.Load(req.ClientId)
 	if !ok {
 		return nil, gnet.None
 	}
-	if v.(*Delay).endTime.IsZero() {
-		v.(*Delay).endTime = time.Now()
-		clientDelay.Store(req.ClientId, v)
+	if v.(Delay).delay.Seconds() <= 0 {
+		connDelay.Store(req.ClientId, Delay{
+			delay: time.Since(v.(Delay).startTime),
+		})
+	}
+	for _, v := range strings.Split(string(req.Data), ",") {
+		if v == "" {
+			continue
+		}
+		pkg.Debug("删除过时的矿机id: %s", v)
+		client, ok := ps.getClient(v)
+		if !ok {
+			return nil, gnet.None
+		}
+		client.Close()
 	}
 	return nil, gnet.None
 }
 
-func (ps *Server) login(req protocol.Request, c gnet.Conn) (out []byte, action gnet.Action) {
-	client, err := ps.getOrCreateClient(req, c)
+func (ps *Server) login(req protocol.Request, _ gnet.Conn) (out []byte, action gnet.Action) {
+	_, err := ps.getOrCreateClient(req)
 	if err != nil {
 		data, _ := protocol.Decode2Byte(protocol.Request{Type: protocol.ERROR, MinerId: req.MinerId, Data: []byte(err.Error())})
 		return data, gnet.None
 	}
-	req = protocol.CopyRequest(req, client.seq.Add(1))
-	pkg.Debug("send response %s", req)
+	req = protocol.CopyRequest(req)
+	pkg.Debug("server -> client %s", req)
 	data, _ := protocol.Decode2Byte(req)
 	return data, gnet.None
 }
 
 func (ps *Server) proxy(req protocol.Request, _ gnet.Conn) (out []byte, action gnet.Action) {
+	defer func() {
+		if err := recover(); err != nil {
+			if strings.Contains(cast.ToString(err), "send on closed channel") {
+				return
+			}
+			out, _ = protocol.Decode2Byte(protocol.Request{Type: protocol.ACK,
+				MinerId: req.MinerId})
+		}
+	}()
 	client, ok := ps.getClient(req.MinerId)
 	if !ok {
 		data, _ := protocol.Decode2Byte(protocol.Request{Type: protocol.ERROR,
@@ -279,35 +344,60 @@ func (ps *Server) proxy(req protocol.Request, _ gnet.Conn) (out []byte, action g
 	}
 	client.input <- req.Data
 	client.dataSize.Add(int64(len(req.Data)))
-	TOTALSIZE.Add(int64(len(req.Data)))
-	req = protocol.CopyRequest(req, client.seq.Add(1))
+	req = protocol.Request{Type: protocol.ACK,
+		MinerId: req.MinerId}
 	data, _ := protocol.Decode2Byte(req)
+	pkg.Debug("server -> client %s", req)
 	return data, gnet.None
 }
 
-func (ps *Server) init(req protocol.Request, _ gnet.Conn) (out []byte, action gnet.Action) {
-	// 清理所有的client
-	clients.Range(func(key, value interface{}) bool {
-		client := value.(*Client)
-		if client.clientId == req.ClientId {
-			clients.Delete(key)
+func (ps *Server) getConnId(clientId string, c gnet.Conn) string {
+	return fmt.Sprintf("%s_%s", clientId, c.RemoteAddr().String())
+}
+
+func (ps *Server) init(req protocol.Request, c gnet.Conn) (out []byte, action gnet.Action) {
+	info := strings.Split(string(req.Data), "|")
+	if len(info) < 3 {
+		return nil, gnet.Close
+	}
+	v, _ := conns.LoadOrStore(req.ClientId, NewClientDispatch(req.ClientId, info[0], info[2]))
+	cd := v.(*ClientDispatch)
+
+	cd.SetConn(ps.getConnId(req.ClientId, c), c)
+	connId2Id.Store(c.RemoteAddr().String(), req.ClientId)
+	var closeMiner []string
+	for _, miner := range pkg.String2Array(info[1], ",") {
+		if _, ok := clients.Load(miner); !ok {
+			closeMiner = append(closeMiner, miner)
 		}
+	}
+	if len(closeMiner) != 0 {
+		data, _ := protocol.Decode2Byte(protocol.Request{
+			ClientId: cd.ClientId,
+			Type:     protocol.CLOSE,
+			Data:     []byte(strings.Join(closeMiner, ",")),
+		})
+		return data, gnet.None
+	}
+	data, _ := protocol.Decode2Byte(protocol.Request{
+		ClientId: cd.ClientId,
+		Type:     req.Type,
+	})
+	pkg.Debug("server -> client %s", req)
+	cd.conns.Range(func(key, value interface{}) bool {
 		return true
 	})
-	data, _ := protocol.Decode2Byte(protocol.CopyRequest(req, 0))
 	return data, gnet.None
 }
 
 func (ps *Server) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
+	defer pkg.Recover(true)
 	req, err := protocol.Encode2Request(frame)
 	if err != nil {
-		pkg.Debug("Encode2Request error %s", err)
+		pkg.Warn("Encode2Request error %s", err)
 		return nil, gnet.Close
 	}
-	if req.Type != protocol.PING && req.Type != protocol.PONG {
-		pkg.Debug("read data from client %s %s", c.RemoteAddr().String(), req.String())
-	}
-	setClientConn(req.ClientId, c)
+	pkg.Debug("server <- client %s", req.String())
 	switch req.Type {
 	case protocol.INIT:
 		return ps.init(req, c)
@@ -316,7 +406,7 @@ func (ps *Server) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Acti
 	case protocol.LOGIN:
 		return ps.login(req, c)
 	case protocol.PING, protocol.PONG:
-		return ps.readPing(req, c)
+		return ps.ping(req, c)
 	case protocol.CLOSE:
 		client, ok := ps.getClient(req.MinerId)
 		if !ok {
@@ -324,7 +414,12 @@ func (ps *Server) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Acti
 		}
 		client.Close()
 		return nil, gnet.None
-	case protocol.REGISTER:
+	case protocol.ACK:
+		client, ok := ps.getClient(req.MinerId)
+		if !ok {
+			return nil, gnet.None
+		}
+		client.SetReady()
 		return nil, gnet.None
 	}
 	return nil, gnet.Close

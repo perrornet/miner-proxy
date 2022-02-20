@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jmcvetta/randutil"
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
 	"github.com/spf13/cast"
@@ -17,41 +16,25 @@ import (
 )
 
 var (
-	servers      sync.Map
-	clients      sync.Map
-	serverManage *ServerManage
+	clients sync.Map
+	// key=client id value=*ServerManage
+	serverManage sync.Map
 	localIPv4    = pkg.LocalIPv4s()
 )
 
-func InitServerManage(maxConn int, secretKey, serverAddress string) error {
-	s, err := NewServerManage(maxConn, secretKey, serverAddress)
+func InitServerManage(maxConn int, secretKey, serverAddress, clientId, pool string) error {
+	s, err := NewServerManage(maxConn, secretKey, serverAddress, clientId, pool)
 	if err != nil {
 		return err
-	}
-	server := s.GetServer()
-	if server == nil {
-		return errors.New("connection to server error")
-	}
-
-	fc := protocol.NewGoframeProtocol(s.secretKey, true, server.conn)
-	req := protocol.Request{
-		ClientId: pkg.CLIENTID,
-		Type:     protocol.INIT,
-	}
-	data, _ := protocol.Decode2Byte(req)
-	if err := fc.WriteFrame(data); err != nil {
-		return errors.Wrap(err, "send init data error")
 	}
 
 	go func() {
 		for {
-			var count int
-			servers.Range(func(key, value interface{}) bool {
-				count++
-				return true
-			})
-			for i := 0; i < maxConn-count; i++ {
-				server := s.NewServer(fmt.Sprintf("%s_%d", s.serverAddress, i))
+			s.m.RLock()
+			size := len(s.connIds)
+			s.m.RUnlock()
+			for i := 0; i < maxConn-size; i++ {
+				server := s.NewServer(ksuid.New().String())
 				if server == nil {
 					pkg.Warn("connection to server failed")
 				}
@@ -59,19 +42,28 @@ func InitServerManage(maxConn int, secretKey, serverAddress string) error {
 			time.Sleep(time.Second * 5)
 		}
 	}()
-	serverManage = s
+	serverManage.Store(clientId, s)
 	return nil
 }
 
 type ServerManage struct {
-	secretKey, serverAddress string
-	maxConn                  int
+	secretKey, serverAddress, clientId, pool string
+	maxConn                                  int
+	m                                        sync.RWMutex
+	conns                                    sync.Map
+	connIds                                  []string
+	index                                    *atomic.Int64
 }
 
-func NewServerManage(maxConn int, secretKey, serverAddress string) (*ServerManage, error) {
-	s := &ServerManage{secretKey: secretKey, serverAddress: serverAddress, maxConn: maxConn}
+func NewServerManage(maxConn int, secretKey, serverAddress, clientId, pool string) (*ServerManage, error) {
+	s := &ServerManage{
+		secretKey: secretKey, serverAddress: serverAddress,
+		maxConn: maxConn, index: atomic.NewInt64(0),
+		clientId: clientId,
+		pool:     pool,
+	}
 	for i := 0; i < maxConn; i++ {
-		server := s.NewServer(fmt.Sprintf("%s_%d", s.serverAddress, i))
+		server := s.NewServer(ksuid.New().String())
 		if server == nil {
 			return nil, errors.New("connection to server error")
 		}
@@ -79,30 +71,53 @@ func NewServerManage(maxConn int, secretKey, serverAddress string) (*ServerManag
 	return s, nil
 }
 
-func (s *ServerManage) GetServer() *Server {
-	var result []*Server
-	servers.Range(func(key, value interface{}) bool {
-		if value.(*Server).close.Load() {
-			// 重新建立
-			server := s.NewServer(cast.ToString(key))
-			if server == nil {
-				return true
-			}
-			value = server
-			servers.Store(key, server)
+func (s *ServerManage) DelServerConn(key string) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.conns.Delete(key)
+	var conns []string
+	for index, v := range s.connIds {
+		if v == key {
+			continue
 		}
-		result = append(result, value.(*Server))
-		return true
-	})
-	if len(result) == 0 {
-		server := s.NewServer(ksuid.New().String())
-		if server == nil {
+		conns = append(conns, s.connIds[index])
+	}
+	s.connIds = conns
+	return
+}
+
+func (s *ServerManage) SetServerConn(key string, server *Server) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.conns.Store(key, server)
+	s.connIds = append(s.connIds, key)
+	return
+}
+
+func (s *ServerManage) GetServer() *Server {
+	s.m.RLock()
+	connSize := len(s.connIds)
+	if connSize == 0 {
+		s.m.RUnlock()
+		return nil
+	}
+	index := s.index.Add(1) % int64(connSize)
+	key := s.connIds[index]
+	s.m.RUnlock()
+	v, ok := s.conns.Load(key)
+	if !ok {
+		return nil
+	}
+	server := v.(*Server)
+	if server == nil || server.close.Load() { // 连接
+		s.DelServerConn(key)
+		key = ksuid.New().String()
+		if server = s.NewServer(key); server == nil {
 			return nil
 		}
-		return server
+		s.SetServerConn(key, server)
 	}
-	index, _ := randutil.IntRange(0, len(result))
-	return result[index]
+	return server
 }
 
 func (s *ServerManage) NewServer(id string) *Server {
@@ -117,49 +132,85 @@ func (s *ServerManage) NewServer(id string) *Server {
 		close:   atomic.NewBool(false),
 	}
 
+	fc := protocol.NewGoframeProtocol(s.secretKey, true, server.conn)
+	var miners []string
+	clients.Range(func(key, value interface{}) bool {
+		miners = append(miners, cast.ToString(key))
+		return true
+	})
+	req := protocol.Request{
+		ClientId: s.clientId,
+		Type:     protocol.INIT,
+		Data:     []byte(fmt.Sprintf("%s|%s|%s", s.pool, strings.Join(miners, ","), localIPv4)),
+	}
+
+	data, _ := protocol.Decode2Byte(req)
+	pkg.Debug("client -> server %s", req)
+	if err := fc.WriteFrame(data); err != nil {
+		return nil
+	}
+
 	go func(server *Server) {
 		defer server.Close()
+		defer s.DelServerConn(id)
 		fc := protocol.NewGoframeProtocol(s.secretKey, true, server.conn)
 		for !server.close.Load() {
 			data, err := fc.ReadFrame()
 			if err != nil {
-				pkg.Debug("server closed")
 				return
 			}
 			req, err := protocol.Encode2Request(data)
 			if err != nil {
 				return
 			}
-
+			pkg.Debug("client <- server %s", req)
 			switch req.Type {
 			case protocol.PING, protocol.PONG:
+				var needClose []string
+				for _, minerId := range strings.Split(string(req.Data), ",") {
+					if minerId == "" {
+						continue
+					}
+					if _, ok := clients.Load(minerId); !ok { // 发送删除
+						needClose = append(needClose, minerId)
+					}
+				}
+
 				req := protocol.Request{
-					ClientId: pkg.CLIENTID,
+					ClientId: s.clientId,
 					Type:     protocol.PONG,
+					Data:     []byte(strings.Join(needClose, ",")),
 				}
 				data, _ := protocol.Decode2Byte(req)
+				pkg.Debug("client -> server %s", req)
 				if err := fc.WriteFrame(data); err != nil {
 					return
 				}
 				continue
-			case protocol.INIT, protocol.REGISTER:
+			case protocol.INIT:
 				continue
+			case protocol.CLOSE:
+				for _, v := range pkg.String2Array(string(req.Data), ",") {
+					value, ok := clients.Load(v)
+					if !ok {
+						continue
+					}
+					value.(*Client).Close()
+				}
 			}
 			v, ok := clients.Load(req.MinerId)
 			if !ok {
 				continue
 			}
-
 			v.(*Client).input <- req
 		}
 	}(server)
-	fc := protocol.NewGoframeProtocol(s.secretKey, true, server.conn)
-	req, _ := protocol.Decode2Byte(protocol.Request{
-		ClientId: pkg.CLIENTID,
-		Type:     protocol.REGISTER,
-	})
-	_ = fc.WriteFrame(req)
-	servers.Store(id, server)
+
+	s.conns.Store(id, server)
+
+	s.m.RLock()
+	defer s.m.RUnlock()
+	s.connIds = append(s.connIds, id)
 	return server
 }
 
@@ -176,38 +227,43 @@ func (s *Server) Close() {
 		if s.conn != nil {
 			_ = s.conn.Close()
 		}
-		// 从server中删除
-		servers.Delete(s.id)
 	})
 }
 
 type Client struct {
+	ClientId string
+	// id MinerId
 	id, ip, serverAddress, secretKey, poolAddress string
 	lconn                                         net.Conn
 	input                                         chan protocol.Request
 	closed                                        *atomic.Bool
 	ready                                         *atomic.Bool
-	seq                                           *atomic.Int64
+	readyChan                                     chan struct{}
 	stop                                          sync.Once
 }
 
-func newClient(ip string, serverAddress string, secretKey string, poolAddress string, conn net.Conn) {
+func newClient(ip string, serverAddress string, secretKey string, poolAddress string, conn net.Conn, clientId string) {
+	defer pkg.Recover(true)
 	if strings.Contains(ip, "127.0.0.1") && localIPv4 != "" {
 		ip = localIPv4
 	}
 	client := &Client{
 		secretKey:     secretKey,
 		serverAddress: serverAddress,
+		ClientId:      clientId,
 		ip:            ip,
 		lconn:         conn,
 		input:         make(chan protocol.Request),
 		ready:         atomic.NewBool(true),
+		readyChan:     make(chan struct{}),
 		closed:        atomic.NewBool(false),
 		id:            ksuid.New().String(),
 		poolAddress:   poolAddress,
-		seq:           atomic.NewInt64(0),
 	}
-	defer client.Close()
+	defer func() {
+		client.Close()
+	}()
+
 	clients.Store(client.id, client)
 	if err := client.Login(); err != nil {
 		pkg.Warn("login to server failed %s", err)
@@ -228,51 +284,59 @@ func (c *Client) Close() {
 }
 
 func (c *Client) SendToServer(req protocol.Request, maxTry int, secretKey string) error {
+	value, ok := serverManage.Load(c.ClientId)
+	if !ok {
+		return errors.Errorf("not found %s server connection", c.ClientId)
+	}
+	sm := value.(*ServerManage)
 	return pkg.Try(func() bool {
-		s := serverManage.GetServer()
+		s := sm.GetServer()
 		if s == nil {
-			time.Sleep(time.Second) // 最多重试10次
+			s = sm.NewServer(ksuid.New().String())
+		}
+		if s == nil {
+			pkg.Warn("没有server连接可用!也无法新建连接到server端, 检查网络是否畅通, 1S 后重试")
+			time.Sleep(time.Second)
 			return false
 		}
-		req.Seq = c.seq.Add(1)
 		fc := protocol.NewGoframeProtocol(secretKey, true, s.conn)
 		sendData, err := protocol.Decode2Byte(req)
 		if err != nil {
+			time.Sleep(time.Second)
 			return false
 		}
-		pkg.Debug("send data to server %s %s", s.conn.RemoteAddr().String(), req.String())
+		pkg.Debug("client -> server %s", req)
 		if err := fc.WriteFrame(sendData); err != nil {
 			return false
 		}
-		c.SetWait()
 		return true
 	}, maxTry)
 }
 
 func (c *Client) SendCloseToServer(secretKey string) {
 	req := &protocol.Request{
-		ClientId: pkg.CLIENTID,
+		ClientId: c.ClientId,
 		MinerId:  c.id,
 		Type:     protocol.CLOSE,
 	}
 	_ = c.SendToServer(req.End(), 1, secretKey)
+	pkg.Debug("client -> server %s", req)
 }
 
 func (c *Client) SendDataToServer(data []byte, secretKey string) error {
 	req := (&protocol.Request{
 		MinerId:  c.id,
-		ClientId: pkg.CLIENTID,
+		ClientId: c.ClientId,
 		Type:     protocol.DATA,
 		Data:     data,
 	}).End()
+
 	return c.SendToServer(req, 10, secretKey)
 }
 
 func (c *Client) Login() error {
 	req := protocol.Request{
-		Seq:      c.seq.Add(1),
-		MsgId:    ksuid.New().String(),
-		ClientId: pkg.CLIENTID,
+		ClientId: c.ClientId,
 		MinerId:  c.id,
 		Type:     protocol.LOGIN,
 		Data: protocol.DecodeLoginRequest2Byte(protocol.LoginRequest{
@@ -280,11 +344,14 @@ func (c *Client) Login() error {
 			MinerIp:     c.ip,
 		}),
 	}
+	c.SetWait()
 	return c.SendToServer(req, 3, c.secretKey)
 }
 
 func (c *Client) readServerData() {
-	defer c.Close()
+	defer func() {
+		c.Close()
+	}()
 	t := time.NewTicker(time.Second * 5)
 	defer t.Stop()
 	for !c.closed.Load() {
@@ -295,15 +362,21 @@ func (c *Client) readServerData() {
 			}
 			switch req.Type {
 			case protocol.ERROR, protocol.CLOSE:
-				pkg.Error("server error or pool closed. client id %s; error %s", req.MinerId, req.Data)
 				return
-			case protocol.LOGIN:
+			case protocol.LOGIN, protocol.ACK:
 				c.SetReady()
 				continue
 			}
-			c.SetReady()
-			pkg.Debug("read data from server %s %s", c.serverAddress, req)
 			if _, err := c.lconn.Write(req.Data); err != nil {
+				pkg.Warn("写入数据到客户端失败: %s", err)
+				return
+			}
+			if err := c.SendToServer(protocol.Request{
+				ClientId: c.ClientId,
+				MinerId:  c.id,
+				Type:     protocol.ACK,
+			}, 10, c.secretKey); err != nil {
+				pkg.Error("send ACK to server error: %v", err)
 				return
 			}
 		case <-t.C:
@@ -314,19 +387,24 @@ func (c *Client) readServerData() {
 
 func (c *Client) Run() {
 	defer c.Close()
-
+	defer func() {
+		c.Close()
+	}()
 	go c.readServerData()
 
 	for !c.closed.Load() { // 从矿机从读取数据
-		if !c.Wait(10) {
+		if !c.Wait(10 * time.Second) {
+			pkg.Warn("%s %s 等待ack超时", c.ip, c.id)
 			return
 		}
 		data := make([]byte, 1024)
 		n, err := c.lconn.Read(data)
 		if err != nil {
+			pkg.Warn("矿机关闭了连接!")
 			c.SendCloseToServer(c.secretKey)
 			return
 		}
+		c.SetWait()
 		if err := c.SendDataToServer(data[:n], c.secretKey); err != nil {
 			pkg.Debug("send data to server error: %s try 10 times", err)
 			return
@@ -334,27 +412,35 @@ func (c *Client) Run() {
 	}
 }
 
+func (c *Client) SetReady() {
+	if c.ready.Load() {
+		return
+	}
+	c.ready.Store(true)
+	c.readyChan <- struct{}{}
+	pkg.Debug("设置 %s ready", c.id)
+}
+
 func (c *Client) SetWait() {
+	pkg.Debug("设置 %s wait", c.id)
 	c.ready.Store(false)
 }
 
-func (c *Client) Wait(timeout int) bool {
-	var count int
-	for count < timeout {
-		if c.ready.Load() {
-			return true
-		}
-		count++
-		time.Sleep(time.Second)
+func (c *Client) Wait(timeout time.Duration) bool {
+	if c.ready.Load() {
+		return true
 	}
-	return false
+	t := time.NewTicker(timeout)
+	defer t.Stop()
+	select {
+	case <-c.readyChan:
+		return true
+	case <-t.C:
+		return false
+	}
 }
 
-func (c *Client) SetReady() {
-	c.ready.Store(true)
-}
-
-func RunClient(address, secretKey, serverAddress, poolAddress string) error {
+func RunClient(address, secretKey, serverAddress, poolAddress, clientId string) error {
 	s, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
@@ -367,6 +453,6 @@ func RunClient(address, secretKey, serverAddress, poolAddress string) error {
 		pkg.Debug("nwe connect from mine %s", conn.RemoteAddr().String())
 		go newClient(
 			strings.Split(conn.RemoteAddr().String(), ":")[0],
-			serverAddress, secretKey, poolAddress, conn)
+			serverAddress, secretKey, poolAddress, conn, clientId)
 	}
 }

@@ -79,7 +79,7 @@ func (p *proxyService) checkWxPusher(wxPusherToken string, newWxPusherUser bool)
 	}
 	fmt.Println("您已经注册的微信通知用户, 如果您还需要增加用户, 请再次运行 ./miner-proxy -add_wx_user -wx tokne, 增加用户, 已经运行的程序将会在5分钟内更新订阅的用户:")
 	fmt.Println(table.String())
-	if !p.args.Bool("client") && (p.args.String("l") != "" && p.args.String("key") != "") {
+	if !p.args.Bool("c") && (p.args.String("l") != "" && p.args.String("k") != "") {
 		// 不是客户端并且不是只想要增加新的用户, 就直接将wxpusher obj 注册回调
 		if err := server.AddConnectErrorCallback(w); err != nil {
 			pkg.Fatal("注册失败通知callback失败: %s", err.Error())
@@ -93,17 +93,19 @@ func (p *proxyService) startHttpServer() {
 	app := gin.New()
 	app.Use(gin.Recovery(), middleware.Cors())
 
-	if p.args.String("pass") != "" {
+	if p.args.String("p") != "" {
 		app.Use(gin.BasicAuth(gin.Accounts{
-			"admin": p.args.String("pass"),
+			"admin": p.args.String("p"),
 		}))
 	}
 
 	port := strings.Split(p.args.String("l"), ":")[1]
+
 	app.Use(func(ctx *gin.Context) {
 		ctx.Set("tag", gitTag)
-		ctx.Set("secretKey", p.args.String("key"))
+		ctx.Set("secretKey", p.args.String("k"))
 		ctx.Set("server_port", port)
+		ctx.Set("download_github_url", p.args.String("g"))
 	})
 
 	app2.NewRouter(app)
@@ -112,8 +114,8 @@ func (p *proxyService) startHttpServer() {
 		c.Data(http.StatusOK, "text/html", indexHtml)
 	})
 
-	pkg.Info("web server address: %s", p.args.String("api"))
-	if err := app.Run(p.args.String("api")); err != nil {
+	pkg.Info("web server address: %s", p.args.String("a"))
+	if err := app.Run(p.args.String("a")); err != nil {
 		pkg.Panic(err.Error())
 	}
 }
@@ -145,62 +147,90 @@ func (p *proxyService) run() {
 			p.run()
 		}
 	}()
-	if p.args.Bool("client") {
-		fmt.Printf("监听端口 '%s', 服务端地址: '%s'\n", p.args.String("l"), p.args.String("r"))
-	}
-	if !p.args.Bool("client") {
+
+	if !p.args.Bool("c") {
 		fmt.Printf("监听端口 '%s', 默认矿池地址: '%s'\n", p.args.String("l"), p.args.String("r"))
 	}
 
-	if p.args.Bool("debug") {
+	if p.args.Bool("d") {
 		pkg.Warn("你开启了-debug 参数, 该参数建议只有在测试时开启")
 	}
 
-	if len(p.args.String("key")) > 32 {
+	if len(p.args.String("k")) > 32 {
 		pkg.Error("密钥必须小于等于32位!")
 		os.Exit(1)
 	}
-	secretKey := p.args.String("key")
+	secretKey := p.args.String("k")
 	for len(secretKey)%16 != 0 {
 		secretKey += "0"
 	}
-	_ = p.args.Set("key", secretKey)
-	if !p.args.Bool("client") {
-		go func() {
-			for range time.Tick(time.Second * 360) {
-				server.Show(time.Duration(p.args.Int64("offline")) * time.Second)
-			}
-		}()
+	_ = p.args.Set("k", secretKey)
 
-		go p.startHttpServer()
-	}
-
-	if p.args.Bool("client") {
+	if p.args.Bool("c") {
 		go p.randomRequestHttp()
-	}
 
-	if p.args.Bool("client") {
 		if err := p.runClient(); err != nil {
 			pkg.Fatal("run client failed %s", err)
 		}
+
+		select {}
 	}
-	if err := p.runServer(); err != nil {
-		pkg.Fatal("run server failed %s", err)
+
+	if !p.args.Bool("c") {
+		go func() {
+			for range time.Tick(time.Second * 60) {
+				server.Show(time.Duration(p.args.Int64("offline")) * time.Second)
+			}
+		}()
+		if p.args.String("a") != "" {
+			go p.startHttpServer()
+		}
+
+		if err := p.runServer(); err != nil {
+			pkg.Fatal("run server failed %s", err)
+		}
 	}
+
 }
 
 func (p *proxyService) runClient() error {
 	id, _ := machineid.ID()
-	pkg.CLIENTID = pkg.Md5(fmt.Sprintf("%s-%s-%s-%s-%s", id,
-		p.args.String("key"), p.args.String("r"), p.args.String("l"), p.args.String("pool")))
-	if err := client.InitServerManage(10, p.args.String("key"), p.args.String("r")); err != nil {
-		return err
+	pools := strings.Split(p.args.String("u"), ",")
+	for index, port := range strings.Split(p.args.String("l"), ",") {
+		port = strings.ReplaceAll(port, " ", "")
+		if port == "" {
+			continue
+		}
+		if len(pools) < index {
+			return errors.Errorf("-l参数: %s, --pool参数:%s; 必须一一对应", p.args.String("l"), p.args.String("u"))
+		}
+		pools[index] = strings.ReplaceAll(pools[index], " ", "")
+		clientId := pkg.Crc32IEEEStr(fmt.Sprintf("%s-%s-%s-%s-%s", id,
+			p.args.String("k"), p.args.String("r"), port, pools[index]))
+
+		if err := pkg.Try(func() bool {
+			if err := client.InitServerManage(p.args.Int("n"), p.args.String("k"), p.args.String("r"), clientId, pools[index]); err != nil {
+				pkg.Error("连接到 %s 失败, 请检查到服务端的防火墙是否开放该端口, 或者检查服务端是否启动! 错误信息: %s", p.args.String("r"), err)
+				time.Sleep(time.Second)
+				return false
+			}
+			return true
+		}, 1000); err != nil {
+			pkg.Fatal("连接到服务器失败!")
+		}
+
+		fmt.Printf("监听端口 '%s', 矿池地址: '%s'\n", port, pools[index])
+		go func(pool, clientId, port string) {
+			if err := client.RunClient(port, p.args.String("k"), p.args.String("r"), pool, clientId); err != nil {
+				pkg.Panic("初始化%s客户端失败: %s", clientId, err)
+			}
+		}(pools[index], clientId, port)
 	}
-	return client.RunClient(p.args.String("l"), p.args.String("key"), p.args.String("r"), p.args.String("pool"))
+	return nil
 }
 
 func (p *proxyService) runServer() error {
-	return server.NewServer(p.args.String("l"), p.args.String("key"), p.args.String("r"))
+	return server.NewServer(p.args.String("l"), p.args.String("k"), p.args.String("r"))
 }
 
 func (p *proxyService) Stop(_ service.Service) error {
@@ -350,11 +380,11 @@ var (
 func main() {
 	flags := []cli.Flag{
 		cli.BoolFlag{
-			Name:  "client",
+			Name:  "c",
 			Usage: "标记当前运行的是客户端",
 		},
 		cli.BoolFlag{
-			Name:  "debug",
+			Name:  "d",
 			Usage: "是否开启debug, 如果开启了debug参数将会打印更多的日志",
 		},
 		cli.StringFlag{
@@ -368,34 +398,42 @@ func main() {
 			Value: "127.0.0.1:80",
 		},
 		cli.StringFlag{
-			Name:  "log_file",
+			Name:  "f",
 			Usage: "将日志写入到指定的文件中",
 		},
 		cli.StringFlag{
-			Name:  "key",
+			Name:  "k",
 			Usage: "数据包加密密钥, 长度小于等于32位",
 		},
 		cli.StringFlag{
-			Name:  "api",
-			Value: ":4567",
+			Name:  "a",
 			Usage: "网页查看状态端口",
 		},
 		cli.StringFlag{
-			Name:  "pool",
-			Usage: "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接, 多个客户端互不干扰",
+			Name:  "u",
+			Usage: "客户端如果设置了这个参数, 那么服务端将会直接使用客户端的参数连接, 如果需要多个矿池, 请使用 -l :端口1,端口2,端口3 -P 矿池1,矿池2,矿池3",
 		},
 		cli.StringFlag{
-			Name:  "wx",
+			Name:  "w",
 			Usage: "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken",
 		},
 		cli.IntFlag{
-			Name:  "offline",
+			Name:  "o",
 			Usage: "掉线多少秒之后就发送微信通知,默认4分钟",
 			Value: 360,
 		},
 		cli.StringFlag{
-			Name:  "pass",
+			Name:  "p",
 			Usage: "访问网页端时的密码, 如果没有设置, 那么网页端将不需要密码即可查看!固定的用户名为:admin",
+		},
+		cli.StringFlag{
+			Name:  "g",
+			Usage: "服务端参数, 使用指定的网址加速github下载, 示例: -g https://gh.api.99988866.xyz/  将会使用 https://gh.api.99988866.xyz/https://github.com/PerrorOne/miner-proxy/releases/download/{tag}/miner-proxy下载",
+		},
+		cli.IntFlag{
+			Name:  "n",
+			Value: 10,
+			Usage: "客户端参数, 指定客户端启动时对于每一个转发端口通过多少tcp隧道连接服务端, 如果不清楚请保持默认, 不要设置小于2",
 		},
 	}
 
@@ -431,13 +469,13 @@ func main() {
 				Name: "add_wx_user",
 				Flags: []cli.Flag{
 					cli.StringFlag{
-						Name:     "wx",
+						Name:     "w",
 						Required: true,
 						Usage:    "掉线微信通知token, 该参数只有在服务端生效, ,请在 https://wxpusher.zjiecode.com/admin/main/app/appToken 注册获取appToken",
 					},
 				},
 				Action: func(c *cli.Context) error {
-					return (&proxyService{args: c}).checkWxPusher(c.String("wx"), true)
+					return (&proxyService{args: c}).checkWxPusher(c.String("w"), true)
 				},
 			},
 		},
@@ -445,11 +483,13 @@ func main() {
 		Action: func(c *cli.Context) error {
 			pkg.PrintHelp()
 			fmt.Printf("版本日志: %s\n", gitCommit)
-			if !c.Bool("debug") {
-				pkg.InitLog(zapcore.InfoLevel, c.String("log_file"))
+			var logLevel = zapcore.InfoLevel
+			if c.Bool("d") {
+				logLevel = zapcore.DebugLevel
 			}
-			if c.String("wx") != "" {
-				if err := (&proxyService{args: c}).checkWxPusher(c.String("wx"), false); err != nil {
+			pkg.InitLog(logLevel, c.String("f"))
+			if c.String("w") != "" {
+				if err := (&proxyService{args: c}).checkWxPusher(c.String("w"), false); err != nil {
 					pkg.Fatal(err.Error())
 				}
 			}
