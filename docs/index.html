@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title>miner proxy</title>
+        <!-- Favicon-->
+        <link rel="shortcut icon" href="data:image/png;base64,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" type="image/x-icon" />
+        <!-- Bootstrap icons-->
+        <script src="//code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="//stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+        <link href="//cdn.jsdelivr.net/gh/StartBootstrap/startbootstrap-business-frontpage@v5.0.7/dist/css/styles.css" rel="stylesheet" />
+
+    </head>
+    <body>
+    <div id="download_client_model"  class="modal" data-easein="slideRightIn" tabindex="-1" role="dialog" aria-labelledby="costumModalLabel" aria-hidden="true">
+        <div class="modal-dialog" style="max-width: 75%;">
+            <div class="modal-content" style="width: 100%;margin-left: 4%; margin-top: 5%;margin-left: 3%">
+                <div class="modal-body" style="height: 85%;width: 100%;color: black;">
+                    <h3>服务端下载</h3>
+                    <div class="alert alert-success" id="alert-success">
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-5 col-md-5 col-lg-5">
+                            <div class="form-group">
+                                <label>服务端版本:</label>&nbsp;&nbsp;
+                                <select id="server_version" class="form-control" >
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>服务端系统类型:</label>&nbsp;&nbsp;
+                                <select id="client_system_type" class="form-control" >
+                                    <option value="windows">windows</option>
+                                    <option value="linux">linux</option>
+                                    <option value="darwin">mac</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>服务端系统架构:</label>&nbsp;&nbsp;
+                                <select id="client_system_struct" class="form-control" >
+                                    <option value="amd64">amd64</option>
+                                    <option value="arm">arm</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>服务端运行方式:</label>
+                                <p style="color:red;font-size: 5px;">* 请不要运行多个服务端，客户端可以设置转发多个地址</p>
+                                <select id="client_run_type" class="form-control" >
+                                    <option value="service">服务安装(开机自启动)</option>
+                                    <option value="backend">后台运行(无开机自启动)</option>
+                                    <option value="frontend">前台运行(无开机自启动)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-5 col-md-5 col-lg-5">
+
+                            <div class="form-group">
+                                <span>监听端口:</span>
+                                <p style="color:red;font-size: 5px;">* 您可以在客户端填写 您的服务器ip:填写的端口 来连接服务器</p>
+                                <input type="number" id="port" class="form-control" min="100" max="65535">
+                            </div>
+                            <div class="form-group">
+                                <span>web页面监听端口:</span>
+                                <p style="color:red;font-size: 5px;">* 您可以访问 您的服务器ip:填写的端口 查看服务运行状态已经下载客户端参数</p>
+                                <input type="number"  id="web_port" class="form-control" min="100" max="65535">
+                            </div>
+                            <div class="form-group">
+                                <span>数据加密密钥:</span>
+                                <p style="color:red;font-size: 5px;">* 这是必须的，长度必须小于等于32位</p>
+                                <input type="password" class="form-control" min="100" max="65535" id="password">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="clearfix" style="margin-right: 3%; margin-bottom: 2%;margin-left:76%">
+                    <div class="form-inline">
+                        <a class="btn btn-info" onclick="start_server()">开始</a>
+                        <a class="btn btn-danger" data-dismiss="modal" id="close" style="margin-left: 1%">取消</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+        <!-- Responsive navbar-->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="px-1" style="margin-left: 5%">
+                <img style="height: 50px;width:50px;" src="data:image/png;base64,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">
+                <a class="navbar-brand" href="https://github.com/PerrorOne/miner-proxy" target="_blank">&nbsp;&nbsp;miner proxy</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                </div>
+            </div>
+        </nav>
+        <!-- Header-->
+        <header class="bg-dark py-5">
+            <div class="container px-5" style="margin-left: 15%">
+                <div class="row gx-5 justify-content-center">
+                    <div class="col-lg-6">
+                        <div class="text-center my-5">
+                            <h1 class="display-5 fw-bolder text-white mb-2">高性能无间断加密混淆您的网络特征</h1>
+                            <p class="lead text-white-50 mb-4">基于TCP协议实现,为您的stratum、openvpn、socks5提供支持</p>
+                            <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                                <a class="btn btn-primary btn-lg px-4 me-sm-3" data-toggle="modal" data-target="#download_client_model">马上开始</a>
+                                <a class="btn btn-outline-light btn-lg px-4" href="https://github.com/PerrorOne/miner-proxy" target="_blank">github查看</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <!-- Features section-->
+        <section class="py-5 border-bottom " id="features" style="margin-left: 10%">
+            <div class="container px-5 my-5">
+                <div class="row gx-5">
+                    <div class="col-lg-4 mb-5 mb-lg-0">
+                        <svg t="1645696366327" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6031" width="100" height="100"><path d="M395.765333 586.570667h-171.733333c-22.421333 0-37.888-22.442667-29.909333-43.381334L364.768 95.274667A32 32 0 0 1 394.666667 74.666667h287.957333c22.72 0 38.208 23.018667 29.632 44.064l-99.36 243.882666h187.050667c27.509333 0 42.186667 32.426667 24.042666 53.098667l-458.602666 522.56c-22.293333 25.408-63.626667 3.392-54.976-29.28l85.354666-322.421333z" p-id="6032" fill="#0000FF"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">高性能</h2>
+                        <p>服务端采用<a href="https://gnet.host">gnet</a>实现, 全局无阻塞、异步。</p>
+                    </div>
+                    <div class="col-lg-4 mb-5 mb-lg-0">
+                        <svg t="1645696334225" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5026" width="100" height="100"><path d="M868.266667 960H155.733333C104.533333 960 64 919.466667 64 868.266667V155.733333C64 104.533333 104.533333 64 155.733333 64h714.666667C919.466667 64 960 104.533333 960 155.733333v714.666667c0 49.066667-40.533333 89.6-91.733333 89.6zM155.733333 106.666667C128 106.666667 106.666667 128 106.666667 155.733333v714.666667C106.666667 896 128 917.333333 155.733333 917.333333h714.666667c27.733333 0 49.066667-21.333333 49.066667-49.066666V155.733333C917.333333 128 896 106.666667 868.266667 106.666667H155.733333z" p-id="5027" fill="#0000FF"></path><path d="M812.8 288H211.2c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h601.6c12.8 0 21.333333 8.533333 21.333333 21.333334s-10.666667 21.333333-21.333333 21.333333zM812.8 416H211.2c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h601.6c12.8 0 21.333333 8.533333 21.333333 21.333334s-10.666667 21.333333-21.333333 21.333333zM529.066667 544H211.2c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h317.866667c12.8 0 21.333333 8.533333 21.333333 21.333334s-8.533333 21.333333-21.333333 21.333333zM644.266667 718.933333l21.333333 40.533334 44.8 8.533333-32 32 6.4 44.8-40.533333-21.333333-40.533334 21.333333 6.4-44.8-32-32 44.8-8.533333zM804.266667 714.666667l17.066666 38.4 40.533334-4.266667-23.466667 34.133333 23.466667 32-40.533334-4.266666-17.066666 38.4-17.066667-38.4-40.533333 4.266666 25.6-32-25.6-34.133333 40.533333 4.266667zM484.266667 714.666667l17.066666 38.4 40.533334-4.266667-23.466667 34.133333 23.466667 32-40.533334-4.266666-17.066666 38.4-17.066667-38.4-40.533333 4.266666 25.6-32-25.6-34.133333 40.533333 4.266667z" p-id="5028" fill="#0000FF"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">多协议</h2>
+                        <p>底层基于TCP协议传输，支持stratum、openvpn、socks5、http、ssl等协议。</p>
+                    </div>
+                    <div class="col-lg-4">
+                        <svg t="1645696222511" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3807" data-spm-anchor-id="a313x.7781069.0.i7" width="100" height="100"><path d="M512 138.666667a117.333333 117.333333 0 0 1 91.605333 190.656l195.541334 338.688A117.333333 117.333333 0 1 1 702.570667 810.666667H321.429333a117.333333 117.333333 0 1 1-96.576-142.656l195.541334-338.688A117.333333 117.333333 0 0 1 512 138.666667z m-258.645333 618.666666a53.333333 53.333333 0 1 0-92.373334 53.333334 53.333333 53.333333 0 0 0 92.373334-53.333334z m590.144-19.52a53.333333 53.333333 0 1 0-53.333334 92.373334 53.333333 53.333333 0 0 0 53.333334-92.373334z m-292.266667-371.2A117.12 117.12 0 0 1 512 373.333333c-13.76 0-26.965333-2.346667-39.210667-6.72l-189.44 328.106667A117.141333 117.141333 0 0 1 318.421333 746.666667h387.157334a117.888 117.888 0 0 1 35.072-51.946667l-189.44-328.106667zM512 202.666667a53.333333 53.333333 0 1 0 0 106.666666 53.333333 53.333333 0 0 0 0-106.666666z" fill="#0000FF" p-id="3808"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">无惧网络波动</h2>
+                        <p>内置的数据同步算法，让您在网络波动剧烈情况下依旧能够正常通信，即便网络被断开也能在网络恢复的一瞬间恢复传输进度。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="container px-5 my-5">
+                <div class="row gx-5">
+                    <div class="col-lg-4 mb-5 mb-lg-0">
+                        <svg t="1645696679813" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6313" width="100" height="100"><path d="M514.894052 473.493977a33.458481 33.458481 0 0 1-13.159625-2.696924l-165.186864-70.67518c-16.98604-7.267097-24.864766-26.928749-17.597669-43.915854 7.267097-16.98604 26.928749-24.8637 43.915854-17.597669l151.95265 65.012811 124.301452-53.792499c16.955138-7.337424 36.650889 0.459255 43.987247 17.415459 7.338489 16.956204-0.459255 36.650889-17.414394 43.988312L528.181544 470.741644a33.462743 33.462743 0 0 1-13.287492 2.752333z m332.142552-143.72442c-12.936924 0-25.253694-7.547338-30.717869-20.175251-7.338489-16.956204 0.459255-36.650889 17.415459-43.988312l65.736324-28.449299L512.198194 70.517478 125.332912 236.980878l54.735517 23.418806c16.98604 7.267097 24.864766 26.928749 17.597669 43.915854-7.267097 16.98604-26.927684 24.864766-43.915855 17.597669l-126.417648-54.087659a33.454219 33.454219 0 0 1-0.063933-61.485819L498.974635 3.368225a33.458481 33.458481 0 0 1 26.444986 0L997.12666 206.339729a33.453153 33.453153 0 0 1 0.062868 61.431476l-136.884612 59.23856a33.349794 33.349794 0 0 1-13.268312 2.759792zM445.288691 1023.529024c-4.829103 0-9.672058-1.044246-14.183625-3.157245L26.306464 830.839076A33.453153 33.453153 0 0 1 7.038002 800.542102V372.714689a33.455284 33.455284 0 0 1 46.374094-30.857457l404.799667 169.498106a33.455284 33.455284 0 0 1 20.533278 30.857457v447.86201a33.455284 33.455284 0 0 1-33.45635 33.454219zM73.945374 779.266131L411.837669 937.472533V564.47334L73.945374 422.990851v356.27528zM575.749061 1023.529024a33.454219 33.454219 0 0 1-33.456349-33.454219V544.803163a33.454219 33.454219 0 0 1 20.36492-30.78713l404.800732-172.088474a33.454219 33.454219 0 0 1 46.541386 30.78713v447.86201a33.455284 33.455284 0 0 1-20.533278 30.857457l-404.800732 169.498106a33.409465 33.409465 0 0 1-12.916679 2.596762z m33.452088-456.596379V939.799709l337.892295-141.482489V423.288142L609.201149 566.932645z" p-id="6314" fill="#0000FF"></path><path d="M512.198194 114.612345l-297.276471 127.37665 299.972329 127.376649 277.644654-132.296325z" fill="#0000FF" p-id="6315"></path><path d="M512.181145 814.688433c-4.439109 0-8.949611-0.888674-13.282165-2.766185L229.592308 695.250181c-16.953007-7.344882-24.742227-27.041698-17.39841-43.994705 7.344882-16.954073 27.042764-24.743292 43.995771-17.397345l269.306672 116.673132c16.953007 7.344882 24.743292 27.041698 17.397345 43.994706-5.467371 12.620454-17.780945 20.162464-30.712541 20.162464z" p-id="6316" fill="#0000FF"></path><path d="M520.493553 812.961165c-13.492079 0-30.464266-8.22077-35.540579-21.581785-6.561698-17.271609 2.120458-36.592283 19.391001-43.153981l261.92343-98.103676c17.27374-6.564895 36.593349 2.119392 43.153981 19.391001 6.561698 17.271609-2.120458 36.592283-19.391001 43.153982l-261.924495 98.10474c-3.910593 1.485386-3.66445 2.189719-7.612337 2.189719z" p-id="6317" fill="#0000FF"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">跨平台</h2>
+                        <p>服务端采用<a href="https://gnet.host">gnet</a>miner-proxy 设计之初就尽量的兼容多平台，它可以运行在 Linux、FreeBSD、Mac Os、Windows。</p>
+                    </div>
+                    <div class="col-lg-4 mb-5 mb-lg-0">
+                        <svg t="1645698483946" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7723" width="100" height="100"><path d="M512 149.333333l6.890667 0.064h0.874666l6.186667 0.213334c39.168 1.472 76.714667 9.173333 111.722667 22.101333l-4.117334-1.493333c2.56 0.896 5.12 1.834667 7.658667 2.794666l-3.541333-1.301333a367.701333 367.701333 0 0 1 20.16 8.149333l-1.066667-0.469333c2.517333 1.088 5.013333 2.197333 7.488 3.349333l-6.4-2.901333c2.773333 1.237333 5.546667 2.496 8.277333 3.776l-1.877333-0.853333c2.986667 1.365333 5.973333 2.794667 8.917333 4.266666l-7.04-3.413333a361.813333 361.813333 0 0 1 32.917334 17.6v0.021333a363.008 363.008 0 0 1 29.610666 19.904l-4.885333-3.584c2.026667 1.450667 4.053333 2.944 6.037333 4.437334l-1.152-0.853334c2.154667 1.6 4.309333 3.242667 6.442667 4.906667l-5.290667-4.053333c2.389333 1.813333 4.778667 3.626667 7.125334 5.504l-1.834667-1.450667c2.773333 2.176 5.504 4.373333 8.213333 6.613333l-6.378666-5.162666a364.8 364.8 0 0 1 21.696 18.602666l-1.322667-1.216c1.962667 1.813333 3.904 3.626667 5.845333 5.482667l-4.522666-4.266667a364.821333 364.821333 0 0 1 19.605333 19.626667l5.248 5.802667 0.298667 0.341333c14.144 16 26.88 33.237333 38.058666 51.562667l0.064 0.085333 4.309334 7.274667a361.834667 361.834667 0 0 1 20.352 41.002666l-2.432-5.653333a357.354667 357.354667 0 0 1 10.069333 25.472l-1.109333-3.114667c0.917333 2.517333 1.792 5.056 2.645333 7.594667l1.258667 3.754667 2.517333 8.106666a360.661333 360.661333 0 0 1 10.773333 47.573334c1.002667 6.4 1.834667 12.8 2.496 19.285333l-0.32-3.008c0.32 3.029333 0.64 6.058667 0.874667 9.109333l-0.554667-6.101333a367.68 367.68 0 0 1 0.576 68.266667l0.213334-2.538667-0.64 7.274667 0.426666-4.736a362.624 362.624 0 0 1-3.456 27.882666 359.936 359.936 0 0 1-16.746666 64.384c-2.048 5.632-4.202667 11.178667-6.506667 16.661334l1.024-2.496c-1.130667 2.794667-2.325333 5.568-3.541333 8.32v0.021333a360.661333 360.661333 0 0 1-17.557334 34.730667l0.469334-0.810667a363.904 363.904 0 0 1-43.264 60.373333l-0.277334 0.298667-4.010666 4.437333-6.186667 6.613334a364.842667 364.842667 0 0 1-14.101333 13.866666l5.610666-5.333333a364.8 364.8 0 0 1-21.397333 19.242667l1.173333-1.002667c-2.624 2.176-5.248 4.330667-7.914666 6.442667l6.72-5.461334a363.968 363.968 0 0 1-24.085334 18.346667 362.325333 362.325333 0 0 1-33.685333 20.885333c-5.802667 3.157333-11.733333 6.186667-17.728 9.066667l1.685333-0.810667a360.618667 360.618667 0 0 1-18.645333 8.362667l6.848-2.944c-2.474667 1.109333-4.970667 2.154667-7.466667 3.2l0.597334-0.256c-3.157333 1.322667-6.357333 2.602667-9.6 3.84l9.002666-3.584c-3.306667 1.365333-6.656 2.688-10.026666 3.946667l1.045333-0.384c-2.986667 1.130667-5.973333 2.24-8.981333 3.285333l7.957333-2.901333c-2.986667 1.130667-6.016 2.24-9.045333 3.285333l1.066666-0.384a362.453333 362.453333 0 0 1-128.128 20.373333l-6.165333-0.170666a361.344 361.344 0 0 1-111.722667-22.122667l4.117334 1.493333c-2.56-0.896-5.12-1.834667-7.658667-2.794666l3.541333 1.301333a367.701333 367.701333 0 0 1-19.093333-7.68l8 3.392a360.554667 360.554667 0 0 1-9.066667-3.84l1.066667 0.448a360.704 360.704 0 0 1-7.488-3.349333l6.4 2.901333c-2.773333-1.237333-5.546667-2.496-8.277333-3.776l1.877333 0.853333c-2.986667-1.365333-5.973333-2.816-8.96-4.266666l7.082667 3.413333a361.813333 361.813333 0 0 1-32.917334-17.6v-0.021333a363.008 363.008 0 0 1-29.610666-19.904l4.629333 3.413333c-2.048-1.493333-4.096-2.986667-6.122667-4.522667l1.493334 1.109334a364.16 364.16 0 0 1-7.381334-5.653334l5.888 4.544a364.224 364.224 0 0 1-6.826666-5.290666l0.938666 0.746666c-2.474667-1.941333-4.906667-3.925333-7.338666-5.930666l6.4 5.184a364.842667 364.842667 0 0 1-21.802667-18.709334l1.472 1.365334c-1.962667-1.813333-3.904-3.626667-5.845333-5.482667l4.373333 4.117333c-2.133333-1.962667-4.224-3.968-6.293333-5.973333v-0.021333c-4.501333-4.373333-8.896-8.874667-13.162667-13.482667l-5.248-5.802667-0.298667-0.341333a363.733333 363.733333 0 0 1-62.869333-100.138667l2.517333 5.866667a357.034667 357.034667 0 0 1-10.133333-25.685333l1.130667 3.2a420.096 420.096 0 0 1-4.138667-12.096 360.682667 360.682667 0 0 1-13.162667-55.765334 362.816 362.816 0 0 1-2.474666-19.669333l0.426666 3.925333c-0.341333-2.88-0.618667-5.76-0.853333-8.682666l0.426667 4.757333a367.68 367.68 0 0 1-0.426667-66.922667l-0.213333 2.538667c0.213333-2.88 0.490667-5.76 0.768-8.618667l-0.554667 6.08a362.602667 362.602667 0 0 1 3.52-28.202666 359.936 359.936 0 0 1 16.746667-64.213334c2.026667-5.653333 4.202667-11.221333 6.506666-16.725333l-0.64 1.6a360.746667 360.746667 0 0 1 20.992-42.56l4.309334-7.296a364.202667 364.202667 0 0 1 38.122666-51.626667l0.277334-0.341333 5.077333-5.610667a364.906667 364.906667 0 0 1 15.786667-16.042666l-2.176 2.069333 4.906666-4.672c2.730667-2.56 5.504-5.077333 8.32-7.552l-2.133333 1.898667 3.925333-3.477334-1.792 1.578667c2.410667-2.133333 4.842667-4.202667 7.296-6.272l-5.504 4.693333c2.133333-1.834667 4.266667-3.669333 6.442667-5.461333l-0.938667 0.768c4.736-3.946667 9.557333-7.765333 14.506667-11.477333l-4.117333 3.136a366.250667 366.250667 0 0 1 12.629333-9.344h-0.021333a364.266667 364.266667 0 0 1 22.186666-14.506667l-6.421333 3.968a362.581333 362.581333 0 0 1 23.786667-13.802667l-0.810667 0.426667c2.176-1.173333 4.352-2.304 6.528-3.413333l-5.717333 2.986666c2.965333-1.578667 5.973333-3.114667 8.96-4.608l-3.242667 1.621334c3.264-1.664 6.549333-3.264 9.856-4.821334l-6.613333 3.2c2.922667-1.450667 5.845333-2.858667 8.789333-4.202666l-2.176 1.002666c2.496-1.173333 5.013333-2.325333 7.552-3.434666l-5.376 2.432c2.538667-1.173333 5.077333-2.325333 7.658667-3.434667l-2.282667 1.002667c6.08-2.709333 12.266667-5.226667 18.517333-7.594667l-7.829333 3.050667a359.808 359.808 0 0 1 25.130667-9.088A362.453333 362.453333 0 0 1 512 149.333333z m-142.933333 518.186667l-3.477334 1.365333a383.274667 383.274667 0 0 0-76.224 42.197334 298.368 298.368 0 0 0 160.298667 93.077333A448.064 448.064 0 0 1 369.066667 667.52z m285.888-0.021333l-0.32 0.832a447.701333 447.701333 0 0 1-80.32 135.829333 298.368 298.368 0 0 0 160.32-93.056 382.421333 382.421333 0 0 0-79.68-43.605333zM512 640c-28.010667 0-55.317333 2.986667-81.621333 8.682667A383.957333 383.957333 0 0 0 512 777.6a384.298667 384.298667 0 0 0 81.621333-128.896A384.533333 384.533333 0 0 0 512 640zM252.010667 364.885333l-2.986667 5.44A297.344 297.344 0 0 0 213.333333 512c0 53.482667 14.08 103.68 38.677334 147.114667a446.528 446.528 0 0 1 99.157333-53.376A448.512 448.512 0 0 1 341.333333 512c0-32.149333 3.392-63.530667 9.813334-93.76a445.866667 445.866667 0 0 1-99.136-53.354667z m519.978666 0l-4.48 3.157334a446.826667 446.826667 0 0 1-94.677333 50.218666C679.253333 448.469333 682.666667 479.850667 682.666667 512c0 32.149333-3.392 63.530667-9.813334 93.76a445.866667 445.866667 0 0 1 99.136 53.354667A297.365333 297.365333 0 0 0 810.666667 512c0-53.482667-14.08-103.68-38.677334-147.114667z m-160.64 72.042667l-4.650666 1.045333c-30.506667 6.570667-62.208 10.026667-94.698667 10.026667-34.133333 0-67.392-3.818667-99.349333-11.050667A386.432 386.432 0 0 0 405.333333 512c0 25.685333 2.517333 50.773333 7.338667 75.072A448.789333 448.789333 0 0 1 512 576c34.133333 0 67.392 3.818667 99.349333 11.050667 4.8-24.256 7.317333-49.365333 7.317334-75.050667 0-25.685333-2.517333-50.773333-7.338667-75.072zM512 246.4l-3.306667 3.498667a384.106667 384.106667 0 0 0-78.293333 125.397333c26.282667 5.696 53.589333 8.704 81.6 8.704 28.010667 0 55.317333-2.986667 81.621333-8.682667A383.957333 383.957333 0 0 0 512 246.4z m-62.293333-26.56l-2.624 0.576a298.432 298.432 0 0 0-157.717334 92.48 382.421333 382.421333 0 0 0 79.68 43.605333 447.914667 447.914667 0 0 1 80.64-136.661333z m124.629333 0l2.986667 3.52a447.573333 447.573333 0 0 1 77.610666 133.12 381.845333 381.845333 0 0 0 79.701334-43.562667 298.368 298.368 0 0 0-160.298667-93.077333z" p-id="7724" fill="#0000FF"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">多端口</h2>
+                        <p>您可以启动一个客户端转发N个地址，无需繁琐的启动多个客户端。</p>
+                    </div>
+                    <div class="col-lg-4">
+                        <svg t="1645698797390" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="12446" width="100" height="100"><path d="M512 63.2L160.8 226.4v244.8c0 226.4 149.6 437.6 351.2 489.6 201.6-51.2 351.2-263.2 351.2-489.6V226.4L512 63.2z m-8 574.4l-45.6 45.6-45.6-45.6-90.4-90.4 45.6-45.6L458.4 592l204-204 45.6 45.6L504 637.6z" p-id="12447" fill="#0000FF"></path></svg>
+                        <h2 class="h4 fw-bolder" style="margin-top: 8%">高安全性</h2>
+                        <p>内置加密、数据检验算法，使得他人无法篡改、查看您的原数据。混淆算法改变了您的数据流量特征无惧机器学习检测。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    <script>
+
+        function start_server() {
+            params = {
+                server_version: $("#server_version").val(),
+                client_system_type: $("#client_system_type").val(),
+                client_system_struct: $("#client_system_struct").val(),
+                client_run_type: $("#client_run_type").val(),
+                port: Number($("#port").val()),
+                web_port: Number($("#web_port").val()),
+                password: $("#password").val(),
+            }
+
+            if (isNaN(params.port) || params.port <= 0 || params.port > 65535 ){
+                alert("'监听端口'必须大于0并且小于65535")
+                return
+            }
+
+            if (isNaN(params.web_port) || params.web_port <= 0 || params.web_port > 65535 ){
+                alert("'web页面监听端口'必须大于0并且小于65535")
+                return
+            }
+
+            if (params.web_port === params.port){
+                alert("'web页面监听端口'不能与'监听端口'相同!")
+                return
+            }
+
+            if (params.password === ""){
+                alert("'数据加密密钥'必须填写!")
+                return
+            }
+
+            if (params.password.length > 32){
+                alert("'数据加密密钥'的长度必须小于等于32位!")
+                return
+            }
+            if (params.client_system_type === "darwin" && params.client_system_struct === "arm"){
+                alert("mac os暂不支持arm架构!")
+                return
+            }
+            let alert_text = $("#alert-success")
+            alert_text.empty()
+            let count = 1
+            if (params.client_system_type === "windows"){
+                url = `https://github.com/PerrorOne/miner-proxy/releases/download/${params.server_version}/miner-proxy_windows_${params.client_system_struct}.exe`
+                alert_text.append(`<p>${count}. 点击<a href="${url}">下载</a>软件</p>`)
+                count++
+                alert_text.append(`<p>${count}. 按 win + r, 输入<code>cmd</code>, 回车后出现cmd黑窗口`)
+                count++
+                alert_text.append(`<p>${count}. 在黑窗口中输入 <code>cd {软件下载目录}</code> 请替换 '{软件下载目录}' 为你自己的目录`)
+                count++
+                alert_text.append(`<p>${count}. 如果您的 '{软件下载目录}' 不在C盘, 那么您还需要在黑窗口中输入'{软件下载目录}'的盘符, 例如'{软件下载目录}'在D盘, 则需要输入<code>D:</code> 完成之后回车`)
+                let cmd = `.\\miner-proxy_windows_${params.client_system_struct}.exe -l :${params.port} -a :${params.web_port} -k "${params.password}"`
+                if (params.client_run_type === "service"){
+                    cmd += ` install`
+                }
+                count++
+                alert_text.append(`<p>${count}. 复制命令到黑窗口运行: <code>${cmd}</code>`)
+                alert_text.append(`<p>更多的命令您可以运行 <code>.\\miner-proxy_windows_${params.client_system_struct}.exe</code> 查看详情`)
+            }else{
+                url = `https://github.com/PerrorOne/miner-proxy/releases/download/${params.server_version}/miner-proxy_${params.client_system_type}_${params.client_system_struct}`
+                count++
+                alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>wget ${url}</code>`)
+                count++
+                alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>chmod +x ./miner-proxy_${params.client_system_type}_${params.client_system_struct}</code>`)
+                let cmd = `./miner-proxy_${params.client_system_type}_${params.client_system_struct} -l :${params.port} -a :${params.web_port} -k "${params.password}"`
+                if (params.client_run_type === "service"){
+                    cmd = `sudo su && ${cmd} install`
+                }
+                if (params.client_run_type === "backend"){
+                    cmd = `nohup ${cmd} > miner.log 2>& 1&`
+                }
+                count++
+                alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>${cmd}</code>`)
+
+                alert_text.append(`<p>更多的命令您可以运行 <code>./miner-proxy_${params.client_system_type}_${params.client_system_struct} -h</code> 查看详情`)
+            }
+            $("#alert-success").show()
+        }
+
+        $(function () {
+            $("#alert-success").hide()
+            $.ajax({
+                method: "GET",
+                url: 'https://api.github.com/repos/PerrorOne/miner-proxy/tags',
+                contentType: "application/json;charset=utf-8",
+                dataType: "json",
+                success: function (data) {
+                    let server_version = $("#server_version")
+                    data.map((item)=>{
+                        if ((item.name.match(/\./g)||[]).length < 2){
+                            return
+                        }
+                        let name = item.name.substr(1, item.name.length)
+                        let versions = name.split(".")
+                        if (Number(versions[0]) === 0 && Number(versions[1]) < 5){
+                            return
+                        }
+                        server_version.append(`<option value="${item.name}">${item.name}</option>`)
+                    })
+                }
+            })
+            $(".modal").each(function(l){$(this).on("show.bs.modal",function(l){var o=$(this).attr("data-easein");"shake"==o?$(".modal-dialog").velocity("callout."+o):"pulse"==o?$(".modal-dialog").velocity("callout."+o):"tada"==o?$(".modal-dialog").velocity("callout."+o):"flash"==o?$(".modal-dialog").velocity("callout."+o):"bounce"==o?$(".modal-dialog").velocity("callout."+o):"swing"==o?$(".modal-dialog").velocity("callout."+o):$(".modal-dialog").velocity("transition."+o)})});
+        })
+    </script>
+    <script src="//stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/velocity/1.2.2/velocity.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/velocity/1.2.2/velocity.ui.min.js'></script>
+    </body>
+</html>
