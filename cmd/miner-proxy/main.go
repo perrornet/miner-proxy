@@ -439,17 +439,19 @@ func main() {
 	}
 
 	app := &cli.App{
-		Name: pkg.StringHelp(),
-		Usage: fmt.Sprintf("\n\t 项目地址: https://github.com/PerrorOne/miner-proxy\n"+
-			"\t 免责声明: 本工具只适用于测试与学习使用, 请勿将其使用到挖矿活动上!!\n\t 版本:%s\n  \t 更新日志:%s", version, gitCommit),
+		Name:      "miner-proxy",
 		UsageText: strings.Join(Usages, "\n"),
-		Version:   fmt.Sprintf("%s: %s", version, gitCommit),
-
 		Commands: []cli.Command{
 			{
 				Name:   "install",
 				Usage:  "./miner-proxy install: 将代理安装到系统服务中, 开机自启动, 必须使用root或者管理员权限运行",
 				Action: Install,
+				Flags: []cli.Flag{
+					cli.BoolFlag{
+						Name:  "delete",
+						Usage: "如果已经存在一个服务, 那么直接删除后,再安装",
+					},
+				},
 			},
 			{
 				Name:   "remove",
@@ -488,8 +490,6 @@ func main() {
 		},
 		Flags: flags,
 		Action: func(c *cli.Context) error {
-			pkg.PrintHelp()
-			fmt.Printf("版本:%s\n更新日志:%s\n", version, gitCommit)
 			var logLevel = zapcore.InfoLevel
 			if c.Bool("d") {
 				logLevel = zapcore.DebugLevel
@@ -509,6 +509,8 @@ func main() {
 		},
 	}
 
+	pkg.PrintHelp()
+	fmt.Printf("版本:%s\n更新日志:%s\n", version, gitCommit)
 	if err := app.Run(os.Args); err != nil {
 		pkg.Fatal("启动代理失败: %s", err)
 	}
