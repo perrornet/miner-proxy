@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"miner-proxy/pkg"
 	"net"
+	"strings"
 
 	"github.com/panjf2000/gnet"
 	"github.com/smallnest/goframe"
@@ -132,6 +133,7 @@ type Request struct {
 	Hash     string      `msgpack:"hash"`
 	Type     RequestType `msgpack:"type"`
 	Data     []byte      `msgpack:"data"`
+	Seq      int64       `msgpack:"seq"`
 }
 
 func CopyRequest(req Request) Request {
@@ -167,7 +169,17 @@ func (r *Request) End() Request {
 }
 
 func (r Request) String() string {
-	return fmt.Sprintf("clientId=%s,hash=%s,miner_id=%s,type=%s,data_size=%d", r.ClientId, r.Hash, r.MinerId, r.Type, len(r.Data))
+	var msg = []string{
+		fmt.Sprintf("clientId=%s", r.ClientId),
+	}
+	if r.Seq != 0 {
+		msg = append(msg, fmt.Sprintf("seq=%d", r.Seq))
+	}
+	if r.Hash != "" {
+		msg = append(msg, fmt.Sprintf("hash=%s", r.Hash))
+	}
+	msg = append(msg, fmt.Sprintf("miner_id=%s,type=%s,data_size=%d", r.MinerId, r.Type, len(r.Data)))
+	return strings.Join(msg, ",")
 }
 
 type LoginRequest struct {

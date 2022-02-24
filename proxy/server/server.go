@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"miner-proxy/pkg"
+	"miner-proxy/pkg/cache"
 	"miner-proxy/proxy/backend"
 	"miner-proxy/proxy/protocol"
 	"strings"
@@ -44,22 +45,39 @@ type Client struct {
 	stop                      sync.Once
 	startTime                 time.Time
 	dataSize                  *atomic.Int64
+	seq                       *atomic.Int64
 	stopTime                  time.Time
 	ready                     *atomic.Bool
 	readyChan                 chan struct{}
+	lastSendReq               protocol.Request
+}
+
+func (c *Client) IsSend(req protocol.Request) bool {
+	key := fmt.Sprintf("send_req:%d:%s:%s", req.Seq, req.Hash, req.ClientId)
+	if _, ok := cache.Client.Get(key); ok {
+		return true
+	}
+	return false
+}
+
+func (c *Client) SetSend(req protocol.Request) {
+	key := fmt.Sprintf("send_req:%d:%s:%s", req.Seq, req.Hash, req.ClientId)
+	cache.Client.SetDefault(key, "")
 }
 
 func (c *Client) SetReady() {
 	if c.ready.Load() {
 		return
 	}
+	c.lastSendReq = protocol.Request{}
 	pkg.Debug("设置 %s ready", c.id)
 	c.ready.Store(true)
 	c.readyChan <- struct{}{}
 }
 
-func (c *Client) SetWait() {
+func (c *Client) SetWait(req protocol.Request) {
 	pkg.Debug("设置 %s wait", c.id)
+	c.lastSendReq = req
 	c.ready.Store(false)
 }
 
@@ -96,6 +114,7 @@ func (c *Client) Init(req protocol.Request, defaultPoolAddress, clientId string)
 	c.startTime = time.Now()
 	c.stopTime = time.Time{}
 	c.dataSize = atomic.NewInt64(0)
+	c.seq = atomic.NewInt64(0)
 	c.closed = atomic.NewBool(false)
 	p, err := backend.NewPoolConn(c.address, c.input, c.output)
 	if err != nil {
@@ -246,8 +265,16 @@ func (ps *Server) getOrCreateClient(req protocol.Request) (*Client, error) {
 		defer c.Close()
 		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
+		var count int
 		for !c.closed.Load() {
-			if !c.Wait(time.Second * 10) {
+			if !c.Wait(time.Second * 3) {
+				if count < 3 && len(c.lastSendReq.Data) != 0 {
+					if err := ps.SendToClient(c.lastSendReq, 1, c.clientId, c.id); err != nil {
+						pkg.Warn("try 10 times write to client failed")
+						return
+					}
+					continue
+				}
 				pkg.Warn("等待 client %s ack 超时", c.id)
 				return
 			}
@@ -262,13 +289,13 @@ func (ps *Server) getOrCreateClient(req protocol.Request) (*Client, error) {
 					return
 				}
 				req := protocol.Request{Type: protocol.DATA, MinerId: c.id, Data: data,
-					ClientId: c.clientId}
+					ClientId: c.clientId, Seq: c.seq.Inc()}
 				data, _ = protocol.Decode2Byte(req)
 				if err := ps.SendToClient(req, 10, c.clientId, c.id); err != nil {
 					pkg.Warn("try 10 times write to client failed")
 					return
 				}
-				c.SetWait()
+				c.SetWait(req)
 				c.dataSize.Add(int64(len(data)))
 			case <-t.C:
 			}
@@ -342,10 +369,14 @@ func (ps *Server) proxy(req protocol.Request, _ gnet.Conn) (out []byte, action g
 			MinerId: req.MinerId, Data: []byte("need login")})
 		return data, gnet.None
 	}
-	client.input <- req.Data
+	if !client.IsSend(req) {
+		client.input <- req.Data
+		client.SetSend(req)
+	}
+
 	client.dataSize.Add(int64(len(req.Data)))
 	req = protocol.Request{Type: protocol.ACK,
-		MinerId: req.MinerId}
+		MinerId: req.MinerId, ClientId: req.ClientId}
 	data, _ := protocol.Decode2Byte(req)
 	pkg.Debug("server -> client %s", req)
 	return data, gnet.None

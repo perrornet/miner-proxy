@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"miner-proxy/pkg"
+	"miner-proxy/pkg/cache"
 	"miner-proxy/proxy/protocol"
 	"net"
 	"strings"
@@ -195,6 +196,7 @@ func (s *ServerManage) NewServer(id string) *Server {
 					if !ok {
 						continue
 					}
+					pkg.Debug("server send mandate close connection")
 					value.(*Client).Close()
 				}
 			}
@@ -237,9 +239,11 @@ type Client struct {
 	lconn                                         net.Conn
 	input                                         chan protocol.Request
 	closed                                        *atomic.Bool
+	lastSendReq                                   protocol.Request
 	ready                                         *atomic.Bool
 	readyChan                                     chan struct{}
 	stop                                          sync.Once
+	seq                                           *atomic.Int64
 }
 
 func newClient(ip string, serverAddress string, secretKey string, poolAddress string, conn net.Conn, clientId string) {
@@ -259,6 +263,7 @@ func newClient(ip string, serverAddress string, secretKey string, poolAddress st
 		closed:        atomic.NewBool(false),
 		id:            ksuid.New().String(),
 		poolAddress:   poolAddress,
+		seq:           atomic.NewInt64(0),
 	}
 	defer func() {
 		client.Close()
@@ -271,6 +276,19 @@ func newClient(ip string, serverAddress string, secretKey string, poolAddress st
 	}
 	client.Run()
 	return
+}
+
+func (c *Client) IsSend(req protocol.Request) bool {
+	key := fmt.Sprintf("c_send_req:%d:%s:%s", req.Seq, req.Hash, req.ClientId)
+	if _, ok := cache.Client.Get(key); ok {
+		return true
+	}
+	return false
+}
+
+func (c *Client) SetSend(req protocol.Request) {
+	key := fmt.Sprintf("c_send_req:%d:%s:%s", req.Seq, req.Hash, req.ClientId)
+	cache.Client.SetDefault(key, "")
 }
 
 func (c *Client) Close() {
@@ -324,13 +342,15 @@ func (c *Client) SendCloseToServer(secretKey string) {
 }
 
 func (c *Client) SendDataToServer(data []byte, secretKey string) error {
-	req := (&protocol.Request{
+	req := protocol.Request{
 		MinerId:  c.id,
 		ClientId: c.ClientId,
 		Type:     protocol.DATA,
 		Data:     data,
-	}).End()
+		Seq:      c.seq.Inc(),
+	}
 
+	c.SetWait(req)
 	return c.SendToServer(req, 10, secretKey)
 }
 
@@ -344,14 +364,12 @@ func (c *Client) Login() error {
 			MinerIp:     c.ip,
 		}),
 	}
-	c.SetWait()
+	c.SetWait(req)
 	return c.SendToServer(req, 3, c.secretKey)
 }
 
 func (c *Client) readServerData() {
-	defer func() {
-		c.Close()
-	}()
+	defer c.Close()
 	t := time.NewTicker(time.Second * 5)
 	defer t.Stop()
 	for !c.closed.Load() {
@@ -362,21 +380,26 @@ func (c *Client) readServerData() {
 			}
 			switch req.Type {
 			case protocol.ERROR, protocol.CLOSE:
+				pkg.Debug("server send mandate close connection")
 				return
 			case protocol.LOGIN, protocol.ACK:
 				c.SetReady()
 				continue
 			}
-			if _, err := c.lconn.Write(req.Data); err != nil {
-				pkg.Warn("写入数据到客户端失败: %s", err)
-				return
+			if !c.IsSend(req) {
+				if _, err := c.lconn.Write(req.Data); err != nil {
+					pkg.Warn("write miner error: %s. close connection", err)
+					return
+				}
+				c.SetSend(req)
 			}
+
 			if err := c.SendToServer(protocol.Request{
 				ClientId: c.ClientId,
 				MinerId:  c.id,
 				Type:     protocol.ACK,
-			}, 10, c.secretKey); err != nil {
-				pkg.Error("send ACK to server error: %v", err)
+			}, 2, c.secretKey); err != nil {
+				pkg.Error("send ACK to server error: %v close connection", err)
 				return
 			}
 		case <-t.C:
@@ -385,28 +408,38 @@ func (c *Client) readServerData() {
 	}
 }
 
+func (c *Client) SendTryLastRequest() {
+	if len(c.lastSendReq.Data) != 0 {
+		pkg.Debug("client -> server try %s", c.lastSendReq)
+		_ = c.SendToServer(c.lastSendReq, 1, c.secretKey)
+	}
+}
+
 func (c *Client) Run() {
 	defer c.Close()
-	defer func() {
-		c.Close()
-	}()
 	go c.readServerData()
 
+	var count int
 	for !c.closed.Load() { // 从矿机从读取数据
-		if !c.Wait(10 * time.Second) {
-			pkg.Warn("%s %s 等待ack超时", c.ip, c.id)
+		if !c.Wait(3 * time.Second) {
+			if count < 3 {
+				c.SendTryLastRequest()
+				continue
+			}
+			pkg.Warn("%s %s 等待ack超时. close connection", c.ip, c.id)
 			return
 		}
+		count = 0
 		data := make([]byte, 1024)
 		n, err := c.lconn.Read(data)
 		if err != nil {
-			pkg.Warn("矿机关闭了连接!")
+			pkg.Warn("miner close connection error: %v. close connection", err)
 			c.SendCloseToServer(c.secretKey)
 			return
 		}
-		c.SetWait()
+
 		if err := c.SendDataToServer(data[:n], c.secretKey); err != nil {
-			pkg.Debug("send data to server error: %s try 10 times", err)
+			pkg.Error("send data to server error: %s try 10 times. close connection", err)
 			return
 		}
 	}
@@ -416,14 +449,16 @@ func (c *Client) SetReady() {
 	if c.ready.Load() {
 		return
 	}
+	c.lastSendReq = protocol.Request{}
 	c.ready.Store(true)
 	c.readyChan <- struct{}{}
 	pkg.Debug("设置 %s ready", c.id)
 }
 
-func (c *Client) SetWait() {
+func (c *Client) SetWait(req protocol.Request) {
 	pkg.Debug("设置 %s wait", c.id)
 	c.ready.Store(false)
+	c.lastSendReq = req
 }
 
 func (c *Client) Wait(timeout time.Duration) bool {
