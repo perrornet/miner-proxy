@@ -4,8 +4,6 @@
 <a title="Build Status" target="_blank" href="https://github.com/PerrorOne/miner-proxy/actions?query=workflow%3ABuild+Release"><img src="https://img.shields.io/github/workflow/status/PerrorOne/miner-proxy/Build%20Release?style=flat-square&logo=github-actions" /></a>
 <a title="Supported Platforms" target="_blank" href="https://github.com/PerrorOne/miner-proxy"><img src="https://img.shields.io/badge/platform-Linux%20%7C%20FreeBSD%20%7C%20Windows%7C%20Mac-549688?style=flat-square&logo=launchpad" /></a>
 <a title="Require Go Version" target="_blank" href="https://github.com/PerrorOne/miner-proxy"><img src="https://img.shields.io/badge/go-%3E%3D1.17-30dff3?style=flat-square&logo=go" /></a>
-<br />
-
 <a title="Release" target="_blank" href="https://github.com/PerrorOne/miner-proxy/releases"><img src="https://img.shields.io/github/v/release/PerrorOne/miner-proxy.svg?color=161823&style=flat-square&logo=smartthings" /></a>
 <a title="Tag" target="_blank" href="https://github.com/PerrorOne/miner-proxy/tags"><img src="https://img.shields.io/github/v/tag/PerrorOne/miner-proxy?color=%23ff8936&logo=fitbit&style=flat-square" /></a>
 </p>
