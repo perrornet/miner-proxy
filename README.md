@@ -32,5 +32,7 @@
 # 🏛 官网
 你可以访问 [miner-proxy](https://perrorone.github.io/miner-proxy/) 获取服务端的安装方式
 
+如果在寻找v0.5.0以下版本的帮助文档，你可以访问 [v0.5.0以下版本文档](https://github.com/PerrorOne/miner-proxy/tree/v0.4.0)
+
 # ⚠️ 证书
 `miner-proxy` 需在遵循 [MIT](https://github.com/PerrorOne/miner-proxy/blob/master/LICENSE) 开源证书的前提下使用。
