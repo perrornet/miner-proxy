@@ -8,7 +8,7 @@
 <a title="Require Go Version" target="_blank" href="https://github.com/PerrorOne/miner-proxy"><img src="https://img.shields.io/badge/go-%3E%3D1.17-30dff3?style=flat-square&logo=go" /></a>
 <a title="Release" target="_blank" href="https://github.com/PerrorOne/miner-proxy/releases"><img src="https://img.shields.io/github/v/release/PerrorOne/miner-proxy.svg?color=161823&style=flat-square&logo=smartthings" /></a>
 <a title="Tag" target="_blank" href="https://github.com/PerrorOne/miner-proxy/tags"><img src="https://img.shields.io/github/v/tag/PerrorOne/miner-proxy?color=%23ff8936&logo=fitbit&style=flat-square" /></a>
-<a title="Chat Room" target="_blank" href="https://jq.qq.com/?_wv=1027&k=xh9ZfSix"><img src="https://github.com/PerrorOne/miner-proxy/blob/master/images/qq.svg?raw=true" /></a>
+<a title="Chat Room" target="_blank" href="https://jq.qq.com/?_wv=1027&k=xh9ZfSix"><img src="https://camo.githubusercontent.com/af90fa146b13bd7b4b66364b1b57b66e5159b1e677e22beb50109493cf347de5/687474703a2f2f636c6c6765656b2e6769746875622e696f2f7376672f69636f2f71712e737667" /></a>
 </p>
 
 # 📃 简介
