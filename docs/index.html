@@ -249,22 +249,33 @@
             $("#alert-success").hide()
             $.ajax({
                 method: "GET",
-                url: 'https://api.github.com/repos/PerrorOne/miner-proxy/tags',
+                url: 'https://api.github.com/repos/PerrorOne/miner-proxy/releases',
                 contentType: "application/json;charset=utf-8",
                 dataType: "json",
                 success: function (data) {
                     let server_version = $("#server_version")
+                    let append_count = 0
                     data.map((item)=>{
-                        if ((item.name.match(/\./g)||[]).length < 2){
+                        if (item.prerelease){
                             return
                         }
-                        let name = item.name.substr(1, item.name.length)
+
+                        if ((item.tag_name.match(/\./g)||[]).length < 2){
+                            return
+                        }
+                        let name = item.tag_name.substr(1, item.tag_name.length)
                         let versions = name.split(".")
                         if (Number(versions[0]) === 0 && Number(versions[1]) < 5){
                             return
                         }
-                        server_version.append(`<option value="${item.name}">${item.name}</option>`)
+                        append_count++
+                        server_version.append(`<option value="${item.tag_name}" title="">${item.tag_name} -- ${item.name}</option>`)
                     })
+                    if (append_count === 0){
+                        $("#alert-success").show()
+                        $("#alert-success").empty()
+                        $("#alert-success").append(`<b style="color:red;">警告</b> <p>当前还没有发布可用的版本, 请等待。您可以选择0.5.0以下版本安装, 您可以访问 <a href="https://github.com/PerrorOne/miner-proxy/releases">releases</a>查看可用的版本</p>`)
+                    }
                 }
             })
             $(".modal").each(function(l){$(this).on("show.bs.modal",function(l){var o=$(this).attr("data-easein");"shake"==o?$(".modal-dialog").velocity("callout."+o):"pulse"==o?$(".modal-dialog").velocity("callout."+o):"tada"==o?$(".modal-dialog").velocity("callout."+o):"flash"==o?$(".modal-dialog").velocity("callout."+o):"bounce"==o?$(".modal-dialog").velocity("callout."+o):"swing"==o?$(".modal-dialog").velocity("callout."+o):$(".modal-dialog").velocity("transition."+o)})});

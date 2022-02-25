@@ -355,6 +355,9 @@
         $("#alert-success").hide()
         load()
 
+
+
+
         $.ajax({
             method: "GET",
             url: '/api/server/version/',
@@ -365,18 +368,40 @@
                 let version = data.data
                 $.ajax({
                     method: "GET",
-                    url: 'https://api.github.com/repos/PerrorOne/miner-proxy/tags',
+                    url: 'https://api.github.com/repos/PerrorOne/miner-proxy/releases',
                     contentType: "application/json;charset=utf-8",
                     dataType: "json",
                     success: function (data) {
                         let client_version = $("#client_version")
+                        let append_count = 0
                         data.map((item)=>{
-                            if (version === item.name){
-                                client_version.append(`<option value="${item.name}" selected>${item.name} -- 当前服务端版本</option>`)
+                            if (version === item.tag_name){
+                                append_count++
+                                client_version.append(`<option value="${item.tag_name}" selected>${item.tag_name} -- 当前服务端版本</option>`)
                                 return
                             }
-                            client_version.append(`<option value="${item.name}">${item.name}</option>`)
+
+                            if (item.prerelease){
+                                return
+                            }
+
+                            if ((item.tag_name.match(/\./g)||[]).length < 2){
+                                return
+                            }
+                            let name = item.tag_name.substr(1, item.tag_name.length)
+                            let versions = name.split(".")
+                            if (Number(versions[0]) === 0 && Number(versions[1]) < 5){
+                                return
+                            }
+                            append_count++
+                            client_version.append(`<option value="${item.tag_name}" title="">${item.tag_name} -- ${item.name}</option>`)
                         })
+
+                        if (append_count === 0){
+                            $("#alert-success").show()
+                            $("#alert-success").empty()
+                            $("#alert-success").append(`<b style="color:red;">警告</b> <p>当前还没有发布可用的版本, 请等待。您可以选择0.5.0以下版本安装, 您可以访问 <a href="https://github.com/PerrorOne/miner-proxy/releases">releases</a>查看可用的版本</p>`)
+                        }
                     }
                 })
             }
