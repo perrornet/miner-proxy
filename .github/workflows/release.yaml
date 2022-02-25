@@ -17,7 +17,10 @@ jobs:
         with:
           version: latest
           files: |
-            ./miner-proxy_*
+            miner-proxy_darwin_amd64
+            miner-proxy_linux_amd64
+            miner-proxy_linux_arm
+            miner-proxy_windows_amd64.exe
           args: -fq
       - name: Release
         uses: softprops/action-gh-release@v1
