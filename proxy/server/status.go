@@ -53,6 +53,7 @@ func Show(offlineTime time.Duration) {
 				offlineClient.Add(fmt.Sprintf("ip: %s; 池: %s; 停止时间: %s", v1.Ip, v1.Pool, v1.StopTime))
 				clients.Delete(v1.Id)
 			}
+
 			_ = table.AddRow(map[string]string{
 				"客户端id":     v.ClientId,
 				"矿工id":      v1.Id,
@@ -223,11 +224,19 @@ func ClientInfo() []*ClientRemoteAddr {
 		if _, ok := clientPools[c.clientId]; !ok {
 			clientPools[c.clientId] = hashset.New()
 		}
+
 		if _, ok := existIpMiner[c.ip]; ok && c.closed.Load() {
 			pkg.Debug("删除旧的miner连接, 使用新的miner连接")
 			clients.Delete(key)
 			return true
 		}
+
+		if time.Since(c.startTime).Seconds() >= 30 && c.dataSize.Load() <= 0 {
+			pkg.Debug("删除未使用的连接")
+			clients.Delete(key)
+			return true
+		}
+
 		clientPools[c.clientId].Add(c.address)
 		m := &Miner{
 			Id:       c.id,
