@@ -240,7 +240,7 @@ func (p *proxyService) Stop(_ service.Service) error {
 func getArgs() []string {
 	var result []string
 	cmds := []string{
-		"install", "remove", "stop", "restart", "start", "stat",
+		"install", "remove", "stop", "restart", "start", "stat", "--delete",
 	}
 A:
 	for _, v := range os.Args[1:] {
