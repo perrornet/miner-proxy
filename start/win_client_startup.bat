@@ -1,1 +1,0 @@
-miner-proxy_windows_amd64.exe -l :12345 -r xxxxx:123456 -sc -client -secret_key 123456789 -debug
