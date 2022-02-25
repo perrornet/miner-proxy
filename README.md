@@ -36,3 +36,8 @@
 
 # ⚠️ 证书
 `miner-proxy` 需在遵循 [MIT](https://github.com/PerrorOne/miner-proxy/blob/master/LICENSE) 开源证书的前提下使用。
+
+# 🎉 JetBrains 开源证书支持
+miner-proxy 在 JetBrains 公司旗下的 GoLand 集成开发环境中进行开发，感谢 JetBrains 公司提供的 free JetBrains Open Source license(s) 正版免费授权，在此表达我的谢意。
+
+<a href="https://www.jetbrains.com/?from=miner-proxy" target="_blank"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg"/></a>
