@@ -232,7 +232,9 @@
                 alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>chmod +x ./miner-proxy_${params.client_system_type}_${params.client_system_struct}</code>`)
                 let cmd = `./miner-proxy_${params.client_system_type}_${params.client_system_struct} -l :${params.port} -a :${params.web_port} -k "${params.password}"`
                 if (params.client_run_type === "service"){
-                    cmd = `sudo su && ${cmd} install`
+                    count++
+                    alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>sudo su</code> 并输入密码, 如果已经是root用户则不需要输入`)
+                    cmd = `${cmd} install`
                 }
                 if (params.client_run_type === "backend"){
                     cmd = `nohup ${cmd} > miner.log 2>& 1&`

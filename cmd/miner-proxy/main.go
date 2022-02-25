@@ -93,10 +93,23 @@ func (p *proxyService) startHttpServer() {
 	app := gin.New()
 	app.Use(gin.Recovery(), middleware.Cors())
 
+	skipAuthPaths := []string{
+		"/download/",
+	}
+
 	if p.args.String("p") != "" {
-		app.Use(gin.BasicAuth(gin.Accounts{
+		middlewareFunc := gin.BasicAuth(gin.Accounts{
 			"admin": p.args.String("p"),
-		}))
+		})
+		app.Use(func(ctx *gin.Context) {
+			for _, v := range skipAuthPaths {
+				if strings.HasPrefix(ctx.Request.URL.Path, v) {
+					return
+				}
+			}
+			middlewareFunc(ctx)
+			return
+		})
 	}
 
 	port := strings.Split(p.args.String("l"), ":")[1]
