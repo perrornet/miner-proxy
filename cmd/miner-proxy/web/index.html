@@ -207,8 +207,10 @@
                 }
                 let datas = data.data.split("/")
                 let help = `
-                        <p>1. 下载完成之后上传该zip包到linux服务器中并运行 <code>unzip zip包名称</code>. 或者复制 <code>wget ${document.URL.substr(0, document.URL.length - 1) + data.data} && unzip ${datas[datas.length - 1].split("?")[0]}</code> 在linux中运行下载解压</p>
-                        <p>2. 进入解压完成的目录中运行 <code>chmod + x ./run.sh && ./run.sh</code> 即可开始运行</p>
+                        <p>1. 复制 <code>wget ${document.URL.substr(0, document.URL.length - 1) + data.data} && unzip ${datas[datas.length - 1]}</code> 如果提示 "unzip: command not found", 请运行<code>yum install -y unzip zip</code> 或者 <code>apt install -y unzip zip</code></p>
+                        <p>2. 复制 <code>cd ./${datas[datas.length - 1].split("?")[1]}</code> 运行</p>
+                        <p>3. 复制 <code>sudo su</code> 运行, 如果提示输入密码, 请输入您的密码</p>
+                        <p>4. 复制 <code>chmod +x ./run.sh && ./run.sh</code> 运行即可</p>
                 `
                 if (client_system_type === "windows"){
                     help = `<p>下载完成之后解压zip压缩包,点击run.bat运行</p>`

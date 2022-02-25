@@ -72,7 +72,7 @@ func (z ZipParams) build(filename, secretKey, serverPort, serverHost string) []b
 				fmt.Sprintf("%s\npause", strings.Join(args, " ")),
 			}
 		} else {
-			args = []string{fmt.Sprintf("sudo su\nchmod +x %s\n%s", fmt.Sprintf("%s", filename), strings.Join(args, " "))}
+			args = []string{fmt.Sprintf("chmod +x %s\n%s", fmt.Sprintf("%s", filename), strings.Join(args, " "))}
 		}
 	case "backend":
 		if strings.ToLower(z.ClientSystemType) == "windows" { // bat
@@ -83,7 +83,7 @@ func (z ZipParams) build(filename, secretKey, serverPort, serverHost string) []b
 			}
 		} else {
 			args = []string{
-				fmt.Sprintf("sudo su\nchmod +x %s\nnohup %s > ./miner-proxy.log 2>& 1&", filename, strings.Join(args, " ")),
+				fmt.Sprintf("chmod +x %s\nnohup %s > ./miner-proxy.log 2>& 1&", filename, strings.Join(args, " ")),
 			}
 		}
 	case "frontend":
