@@ -38,7 +38,7 @@ func (z ZipParams) ID() string {
 		ports = append(ports, v.Port, v.Pool)
 	}
 	name := pkg.Crc32IEEEStr(fmt.Sprintf("%s-%s-%s-%s-%s",
-		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, strings.Join(ports, ","), z.ClientVersion))[:10]
+		z.ClientSystemType, z.ClientSystemStruct, z.ClientRunType, strings.Join(ports, ","), z.ClientVersion))
 	return name
 }
 
