@@ -23,7 +23,7 @@
                     <div class="alert alert-success" id="alert-success">
                     </div>
                     <div class="row">
-                        <div class="col-sm-5 col-md-5 col-lg-5">
+                        <div class="col-sm-4 col-md-4 col-lg-4">
                             <div class="form-group">
                                 <label>服务端版本:</label>&nbsp;&nbsp;
                                 <select id="server_version" class="form-control" >
@@ -56,22 +56,36 @@
                             </div>
                         </div>
 
-                        <div class="col-sm-5 col-md-5 col-lg-5">
+                        <div class="col-sm-4 col-md-4 col-lg-4">
 
                             <div class="form-group">
                                 <span>监听端口:</span>
                                 <p style="color:red;font-size: 5px;">* 您可以在客户端填写 您的服务器ip:填写的端口 来连接服务器</p>
                                 <input type="number" id="port" class="form-control" min="100" max="65535">
-                            </div>
-                            <div class="form-group">
-                                <span>web页面监听端口:</span>
-                                <p style="color:red;font-size: 5px;">* 您可以访问 您的服务器ip:填写的端口 查看服务运行状态已经下载客户端参数</p>
-                                <input type="number"  id="web_port" class="form-control" min="100" max="65535">
-                            </div>
-                            <div class="form-group">
                                 <span>数据加密密钥:</span>
                                 <p style="color:red;font-size: 5px;">* 这是必须的，长度必须小于等于32位</p>
                                 <input type="password" class="form-control" min="100" max="65535" id="password">
+                            </div>
+
+                            <div class="form-group">
+                                <span>web页面监听端口(可选):</span>
+                                <p style="color:red;font-size: 5px;">* 您可以访问 您的服务器ip:填写的端口 查看服务运行状态已经下载客户端参数</p>
+                                <input type="number"  id="web_port" class="form-control" min="100" max="65535">
+                                <span>web页面密码(可选)</span>
+                                <p style="color:red;font-size: 5px;">* 如果不填写将不会有密码, 用户名为admin</p>
+                                <input type="text"  id="web_pass" class="form-control">
+                            </div>
+
+                        </div>
+
+                        <div class="col-sm-3 col-md-3 col-lg-3">
+                            <div class="form-group">
+                                <span>微信掉线通知token(可选):</span>
+                                <p style="color:red;font-size: 5px;">* 请在 <a href="https://wxpusher.zjiecode.com/admin/main/app/appToken" target="_blank">wxpusher</a> 注册获取appToken</p>
+                                <input type="text"  id="wechat_token" class="form-control" >
+                                <span>掉线多久后发送通知(可选)</span>
+                                <p style="color:red;font-size: 5px;">* 单位: 秒</p>
+                                <input type="text"  id="offline_time" class="form-control">
                             </div>
                         </div>
                     </div>
@@ -86,7 +100,21 @@
         </div>
     </div>
 
-
+    <div id="show_qr_mode"  class="modal" data-easein="slideRightIn" tabindex="-1" role="dialog" aria-labelledby="costumModalLabel" aria-hidden="true">
+        <div class="modal-dialog" style="max-width: 75%;">
+            <div class="modal-content" style="width: 32%;margin-left: 30%; margin-top: 5%;">
+                <div class="modal-body" style="height: 85%;width: 100%;color: black;">
+                    <img id="qr">
+                    <p style="margin-left: 10%">请使用微信扫描二维码, 如果您已经关注,那么可以点击下方关闭按钮</p>
+                </div>
+                <div class="clearfix" style="margin-right: 3%; margin-bottom: 2%;margin-left:76%">
+                    <div class="form-inline">
+                        <a class="btn btn-danger" data-dismiss="modal" style="margin-left: 1%">关闭</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
         <!-- Responsive navbar-->
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -175,6 +203,32 @@
                 port: Number($("#port").val()),
                 web_port: Number($("#web_port").val()),
                 password: $("#password").val(),
+                web_pass: $("#web_pass").val(),
+                wechat_token: $("#wechat_token").val(),
+                offline_time: $("#offline_time").val(),
+            }
+
+            if (params.wechat_token !== ""){ // 设置微信订阅
+                $.ajax({
+                    method:"POST",
+                    async: false,
+                    url:"http://wxpusher.zjiecode.com/api/fun/create/qrcode",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        appToken: params.wechat_token,
+                        extra: "miner-proxy",
+                    }),
+                    success: function (data) {
+                        console.log(data)
+                        if (data.code !== 1000){
+                            alert("获取微信订阅二维码失败!请检查微信订阅token是否正确!")
+                            return
+                        }
+                        //
+                        $("#show_qr_mode").modal("show")
+                        $("#qr").attr("src", data.data.shortUrl)
+                    }
+                })
             }
 
             if (isNaN(params.port) || params.port <= 0 || params.port > 65535 ){
@@ -218,6 +272,17 @@
                 count++
                 alert_text.append(`<p>${count}. 如果您的 '{软件下载目录}' 不在C盘, 那么您还需要在黑窗口中输入'{软件下载目录}'的盘符, 例如'{软件下载目录}'在D盘, 则需要输入<code>D:</code> 完成之后回车`)
                 let cmd = `.\\miner-proxy_windows_${params.client_system_struct}.exe -l :${params.port} -a :${params.web_port} -k "${params.password}"`
+                if (params.wechat_token !== ""){
+                    cmd += ` -w ${params.wechat_token}`
+                }
+                if (params.offline_time !== ""){
+                    cmd += ` -o ${params.offline_time}`
+                }
+
+                if (params.web_pass !== ""){
+                    cmd += ` -p "${params.web_pass}"`
+                }
+
                 if (params.client_run_type === "service"){
                     cmd += ` install`
                 }
@@ -236,6 +301,18 @@
                     alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>sudo su</code> 并输入密码, 如果已经是root用户则不需要输入`)
                     cmd = `${cmd} install`
                 }
+
+                if (params.wechat_token !== ""){
+                    cmd += ` -w ${params.wechat_token}`
+                }
+                if (params.offline_time !== ""){
+                    cmd += ` -o ${params.offline_time}`
+                }
+
+                if (params.web_pass !== ""){
+                    cmd += ` -p "${params.web_pass}"`
+                }
+
                 if (params.client_run_type === "backend"){
                     cmd = `nohup ${cmd} > miner.log 2>& 1&`
                 }
