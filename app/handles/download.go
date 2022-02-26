@@ -69,10 +69,10 @@ func (z ZipParams) build(filename, secretKey, serverPort, serverHost string) []b
 		args = append(args, "install")
 		if strings.ToLower(z.ClientSystemType) == "windows" { // bat
 			args = []string{
-				fmt.Sprintf("%s\npause", strings.Join(args, " ")),
+				fmt.Sprintf("%s --delete\npause", strings.Join(args, " ")),
 			}
 		} else {
-			args = []string{fmt.Sprintf("chmod +x %s\n%s", fmt.Sprintf("%s", filename), strings.Join(args, " "))}
+			args = []string{fmt.Sprintf("chmod +x %s\n%s --delete", fmt.Sprintf("%s", filename), strings.Join(args, " "))}
 		}
 	case "backend":
 		if strings.ToLower(z.ClientSystemType) == "windows" { // bat
