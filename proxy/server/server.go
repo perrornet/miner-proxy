@@ -149,6 +149,9 @@ func NewServer(address, secretKey, PoolAddress string) error {
 }
 
 func (ps *Server) OnClosed(c gnet.Conn, _ error) (action gnet.Action) {
+	if c == nil {
+		return gnet.None
+	}
 	clientId, ok := connId2Id.Load(c.RemoteAddr().String())
 	if !ok {
 		return gnet.None
