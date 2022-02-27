@@ -68,10 +68,10 @@
                             </div>
 
                             <div class="form-group">
-                                <span>web页面监听端口(可选):</span>
-                                <p style="color:red;font-size: 5px;">* 您可以访问 您的服务器ip:填写的端口 查看服务运行状态已经下载客户端参数</p>
-                                <input type="number"  id="web_port" class="form-control" min="100" max="65535">
-                                <span>web页面密码(可选)</span>
+                                <span>web页面监听端口:</span>
+                                <p style="color:red;font-size: 5px;">* 您可以访问 您的服务器ip:填写的端口 查看服务运行状态以及<b>下载客户端参数</b></p>
+                                <input type="number"  id="web_port" class="form-control" min="100" max="65535" value="36545">
+                                <span>web页面密码</span>
                                 <p style="color:red;font-size: 5px;">* 如果不填写将不会有密码, 用户名为admin</p>
                                 <input type="text"  id="web_pass" class="form-control">
                             </div>
@@ -291,7 +291,6 @@
                 alert_text.append(`<p>更多的命令您可以运行 <code>.\\miner-proxy_windows_${params.client_system_struct}.exe</code> 查看详情`)
             }else{
                 url = `https://github.com/PerrorOne/miner-proxy/releases/download/${params.server_version}/miner-proxy_${params.client_system_type}_${params.client_system_struct}`
-                count++
                 alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>wget ${url}</code>`)
                 count++
                 alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>chmod +x ./miner-proxy_${params.client_system_type}_${params.client_system_struct}</code>`)
@@ -320,9 +319,12 @@
                 }
                 count++
                 alert_text.append(`<p>${count}. 复制命令, 并在机器上运行 <code>${cmd}</code>`)
-
                 alert_text.append(`<p>更多的命令您可以运行 <code>./miner-proxy_${params.client_system_type}_${params.client_system_struct} -h</code> 查看详情`)
             }
+            if (!isNaN(params.web_port) && params.web_port !== 0){
+                alert_text.append(`<p><b>您可以访问 服务器ip:${params.web_port} 点击下载客户端, 以便下载客户端</b></p>`)
+            }
+
             $("#alert-success").show()
         }
 
