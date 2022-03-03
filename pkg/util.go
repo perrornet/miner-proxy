@@ -17,6 +17,7 @@ func Try(f func() bool, maxTry int) error {
 		if f() {
 			return nil
 		}
+		n++
 	}
 	return errors.New("try run function error")
 }
