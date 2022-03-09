@@ -183,7 +183,6 @@ func (s *ServerManage) NewServer(id string) *Server {
 					Data:     []byte(strings.Join(needClose, ",")),
 				}
 				data, _ := protocol.Decode2Byte(req)
-				pkg.Debug("client -> server %s", req)
 				if err := fc.WriteFrame(data); err != nil {
 					return
 				}
@@ -202,6 +201,7 @@ func (s *ServerManage) NewServer(id string) *Server {
 			}
 			v, ok := clients.Load(req.MinerId)
 			if !ok {
+				pkg.Debug("没有找到 %s miner id", req.MinerId)
 				continue
 			}
 			v.(*Client).input <- req
@@ -376,6 +376,7 @@ func (c *Client) readServerData() {
 		select {
 		case req, ok := <-c.input:
 			if !ok {
+				pkg.Debug("服务端关闭了连接")
 				return
 			}
 			switch req.Type {

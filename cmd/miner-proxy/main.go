@@ -192,7 +192,7 @@ func (p *proxyService) run() {
 	if !p.args.Bool("c") {
 		go func() {
 			for range time.Tick(time.Second * 60) {
-				server.Show(time.Duration(p.args.Int64("offline")) * time.Second)
+				server.Show(time.Duration(p.args.Int64("o")) * time.Second)
 			}
 		}()
 		if p.args.String("a") != "" {

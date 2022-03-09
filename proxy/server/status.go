@@ -50,7 +50,7 @@ func Show(offlineTime time.Duration) {
 	for _, v := range ClientInfo() {
 		for _, v1 := range v.Miners {
 			if !v1.IsOnline && !v1.stopTime.IsZero() && time.Since(v1.stopTime).Seconds() >= offlineTime.Seconds() {
-				offlineClient.Add(fmt.Sprintf("ip: %s; 池: %s; 停止时间: %s", v1.Ip, v1.Pool, v1.StopTime))
+				offlineClient.Add(fmt.Sprintf("ip: %s; 池: %s; 停止时间: %s 前", v1.Ip, v1.Pool, time.Since(v1.stopTime)))
 				clients.Delete(v1.Id)
 			}
 
