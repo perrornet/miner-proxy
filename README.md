@@ -11,6 +11,8 @@
 <a title="Chat Room" target="_blank" href="https://jq.qq.com/?_wv=1027&k=xh9ZfSix"><img src="https://camo.githubusercontent.com/af90fa146b13bd7b4b66364b1b57b66e5159b1e677e22beb50109493cf347de5/687474703a2f2f636c6c6765656b2e6769746875622e696f2f7376672f69636f2f71712e737667" /></a>
 </p>
 
+**谨慎使用0.5以上版本, 推荐使用[0.4](https://github.com/PerrorOne/miner-proxy/releases/tag/v0.4.0)/[0.35](https://github.com/PerrorOne/miner-proxy/releases/tag/v0.3.5)版本**
+
 # 📃 简介
 * `miner-proxy`底层基于TCP协议传输，支持stratum、openvpn、socks5、http、ssl等协议。
 * `miner-proxy`内置加密、数据检验算法，使得他人无法篡改、查看您的原数据。混淆算法改变了您的数据流量特征无惧机器学习检测。
